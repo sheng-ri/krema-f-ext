@@ -1,5 +1,6 @@
+# 按钮在所有分支可见：发布与自检都不依赖具体分支。
 branch:
-  - reg: ^main$
+  - reg: ^.*$
     buttons:
       - name: 发布 Release
         description: 发布正式版本到 maven registry（版本取代码里的 project.version）

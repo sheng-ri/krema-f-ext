@@ -18,17 +18,35 @@
   env:
     GRADLE_USER_HOME: /home/gradle/gradle-cache
 
+# 发布：门禁过了才发，发的是代码里的 project.version。
+.publish: &publish
+  name: 发布到 maven registry
+  script:
+    - ./gradlew publish --configuration-cache
 
+# 分支键写 "$" 兜底，任何分支的 push / PR 都过门禁。
 $:
-  # 正式发布：按钮触发，版本走代码里的 project.version。
+  push:
+    verify:
+      name: 主干门禁
+      <<: *pipeline
+      stages:
+        - *verify
+
+  pull_request:
+    verify:
+      name: PR 门禁
+      <<: *pipeline
+      stages:
+        - *verify
+
+  # 正式发布。
   web_trigger_release:
     - name: 发布 Release
       <<: *pipeline
       stages:
         - *verify
-        - name: 发布到 maven registry
-          script:
-            - ./gradlew publish --configuration-cache
+        - *publish
 
   # SNAPSHOT 发布：同版本号直接覆盖，覆盖策略由制品库负责。
   web_trigger_snapshot:
@@ -36,9 +54,7 @@ $:
       <<: *pipeline
       stages:
         - *verify
-        - name: 发布到 maven registry
-          script:
-            - ./gradlew publish --configuration-cache
+        - *publish
 
   # 手动入口：工具链自检。
   web_trigger:
@@ -49,24 +65,3 @@ $:
           script:
             - java -version
             - ./gradlew --version
-  push:
-    verify:
-      name: 主干门禁
-      <<: *pipeline
-      stages:
-        - *verify
-  pull_request:
-    verify:
-      name: PR 门禁
-      <<: *pipeline
-      stages:
-        - *verify
-  vscode:
-    - docker:
-        image: docker.cnb.cool/birthcat/BirthCat/dev-kotlin-jvm-25:latest
-      services:
-        - vscode
-        - docker
-      stages:
-        - name: ls
-          script: ls
