@@ -18,17 +18,19 @@
   env:
     GRADLE_USER_HOME: /home/gradle/gradle-cache
 
-main:
-  pull_request:
+# 主干：push 与 PR 都过门禁。
+# PR 事件按「目标分支」匹配，两个分支名都列上，避免仓库改名期间漏门禁。
+"(main|feat/t1-init-skeleton)":
+  push:
     verify:
-      name: PR 门禁
+      name: 主干门禁
       <<: *pipeline
       stages:
         - *verify
 
-  push:
+  pull_request:
     verify:
-      name: 主干门禁
+      name: PR 门禁
       <<: *pipeline
       stages:
         - *verify
