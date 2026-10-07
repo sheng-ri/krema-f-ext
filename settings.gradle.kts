@@ -4,6 +4,9 @@ include("krema-cli-spi", "krema-gradle-plugin")
 
 pluginManagement {
     repositories {
+        maven {
+            url = uri("https://maven.cnb.cool/BirthCat-Dev/jars/-/packages/")
+        }
         gradlePluginPortal()
         mavenCentral()
     }
@@ -12,6 +15,9 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        maven {
+            url = uri("https://maven.cnb.cool/BirthCat-Dev/jars/-/packages/")
+        }
         mavenCentral()
     }
 }

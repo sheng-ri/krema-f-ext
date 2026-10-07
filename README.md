@@ -36,7 +36,7 @@ Krema 是一套 Java + 系统 WebView 的桌面框架，上游自带一个 `krem
 
 ```kotlin
 plugins {
-    id("cnb.cool.birthcat.krema")
+    id("top.birthcat.kremaf.ext")
 }
 
 krema {

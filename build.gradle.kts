@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.spotless) apply false
+    alias(libs.plugins.kotlin.jvm) apply false
     `maven-publish`
 }
 
@@ -13,6 +14,12 @@ private val cnbRegistryUrl = "https://maven.cnb.cool/BirthCat-Dev/jars/-/package
 
 subprojects {
     apply(plugin = "com.diffplug.spotless")
+
+    plugins.withId("org.jetbrains.kotlin.jvm") {
+        extensions.configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
+            jvmToolchain(25)
+        }
+    }
 
     plugins.withId("java") {
         extensions.configure<JavaPluginExtension> {
@@ -48,9 +55,9 @@ subprojects {
     }
 
     configure<com.diffplug.gradle.spotless.SpotlessExtension> {
-        java {
-            target("src/**/*.java")
-            googleJavaFormat()
+        kotlin {
+            target("src/**/*.kt")
+            ktlint()
             licenseHeader(
                 """
                 /*
