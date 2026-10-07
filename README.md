@@ -7,11 +7,10 @@ Krema 是一套 Java + 系统 WebView 的桌面框架，上游自带一个 `krem
 
 ## 上游关系
 
-- 上游仓库 `BirthCat-Dev/krema-f` 是只读参照。
-- 运行时依赖走 Maven Central 的 `build.krema:krema-core`，不依赖上游源码。
-- 不引上游 `krema-cli`：它是 picocli 终端外壳，编排逻辑和终端输出长在一起，上游也刻意不发它到 Maven。
-- 编排能力按 Gradle 方言在 `krema-cli-spi` 重建，上游接口形状作参考。
-- 本仓库用 Apache-2.0 许可，`NOTICE` 里留了与上游的关系说明。
+编排能力在 `krema-cli-spi` 全自研，不依赖上游任何制品。上游仓库 `BirthCat-Dev/krema-f` 与
+`build.krema:krema-core` 只作参考：要用的东西自己实现，自己负责。
+
+本仓库用 Apache-2.0 许可。
 
 ## 模块
 
