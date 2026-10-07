@@ -1,6 +1,6 @@
 plugins {
+    alias(libs.plugins.kotlin.jvm)
     `java-gradle-plugin`
-    `maven-publish`
 }
 
 dependencies {
@@ -13,8 +13,8 @@ dependencies {
 gradlePlugin {
     plugins {
         create("krema") {
-            id = "cnb.cool.birthcat.krema"
-            implementationClass = "cnb.cool.birthcat.krema.gradle.KremaPlugin"
+            id = "top.birthcat.kremaf.ext"
+            implementationClass = "top.birthcat.kremaf.ext.gradle.KremaPlugin"
         }
     }
 }
