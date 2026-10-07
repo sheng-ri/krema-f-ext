@@ -3,6 +3,4 @@ Copyright (c) 2026 BirthCat
 
 This product includes software developed at BirthCat.
 
-bundling 的接口形状参考 Krema CLI（github.com/krema-build/krema）。
-本仓库不含 krema-cli 源码；上游能力通过 Central 公开坐标
-build.krema:krema-core 消费。上游许可为 BSL-1.1，Change Date 2030-02-06。
+编排能力全自研，不依赖任何上游制品。
