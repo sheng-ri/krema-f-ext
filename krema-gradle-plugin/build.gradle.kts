@@ -1,6 +1,5 @@
 plugins {
     `java-gradle-plugin`
-    `maven-publish`
 }
 
 dependencies {
