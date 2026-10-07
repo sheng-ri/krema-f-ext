@@ -1,46 +1,65 @@
-# 构建镜像：JDK 25 + Gradle 9.8 + 无头 GUI 依赖。
-# 只有 Dockerfile 进版本键：改 apt 清单只重建，不换标签。
-.docker-build:
-  build:
-    dockerfile: .cnb/build/Dockerfile
-    by:
-      - .cnb/build/Dockerfile
-      - .cnb/build/apt-packages.txt
-      - gradle/wrapper/gradle-wrapper.properties
-    versionBy:
-      - .cnb/build/Dockerfile
-
 # 门禁只有一件事：编译过、格式干净、测试绿。
 # 端到端（真开窗口）不进这里 —— 测的是 Krema 运行时，不是本插件。
-.verify:
+.verify: &verify
   name: 构建与格式检查
   script:
-    - ./gradlew build spotlessCheck --configuration-cache
+    - ./gradlew spotlessCheck test --configuration-cache
 
-main:
-  pull_request:
-    verify:
-      name: PR 门禁
-      docker: !reference [.docker-build]
-      env:
-        GRADLE_USER_HOME: /home/gradle/gradle-cache
-      stages:
-        - !reference [.verify]
+# 构建环境：本仓 Dockerfile 动态构建，平台按 hash 缓存。
+# Gradle 缓存挂到构建节点，跨流水线复用依赖与 wrapper。
+.pipeline: &pipeline
+  docker:
+    build:
+      dockerfile: .cnb/build/Dockerfile
+      by:
+        - .cnb/build/Dockerfile
+    volumes:
+      - gradle-cache:/home/gradle/gradle-cache:cow
+  env:
+    GRADLE_USER_HOME: /home/gradle/gradle-cache
 
+# 发布：门禁过了才发，发的是代码里的 project.version。
+.publish: &publish
+  name: 发布到 maven registry
+  script:
+    - ./gradlew publish --configuration-cache
+
+# 分支键写 "$" 兜底，任何分支的 push / PR 都过门禁。
+$:
   push:
     verify:
       name: 主干门禁
-      docker: !reference [.docker-build]
-      env:
-        GRADLE_USER_HOME: /home/gradle/gradle-cache
+      <<: *pipeline
       stages:
-        - !reference [.verify]
+        - *verify
 
-$:
-  # 手动入口：留一个占位，端到端窗口测试将来挂这里。
+  pull_request:
+    verify:
+      name: PR 门禁
+      <<: *pipeline
+      stages:
+        - *verify
+
+  # 正式发布。
+  web_trigger_release:
+    - name: 发布 Release
+      <<: *pipeline
+      stages:
+        - *verify
+        - *publish
+
+  # SNAPSHOT 发布：同版本号直接覆盖，覆盖策略由制品库负责。
+  web_trigger_snapshot:
+    - name: 发布 Snapshot
+      <<: *pipeline
+      stages:
+        - *verify
+        - *publish
+
+  # 手动入口：工具链自检。
   web_trigger:
     - name: 工具链自检
-      docker: !reference [.docker-build]
+      <<: *pipeline
       stages:
         - name: 打印版本
           script:

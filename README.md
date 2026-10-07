@@ -3,13 +3,14 @@
 把 [Krema](https://cnb.cool/BirthCat-Dev/krema-f) 的构建编排能力收进 Gradle 插件。
 
 Krema 是一套 Java + 系统 WebView 的桌面框架，上游自带一个 `krema` CLI 来初始化项目、
-跑开发服务器、构建与打包。本项目不改上游一行，而是在它之上做二次开发：让 Gradle 拥有
-同一套构建编排能力。
+跑开发服务器、构建与打包。本项目在它之上做二次开发：让 Gradle 拥有同一套构建编排能力。
 
 ## 上游关系
 
 - 上游仓库 `BirthCat-Dev/krema-f` 是只读参照。
 - 运行时依赖走 Maven Central 的 `build.krema:krema-core`，不依赖上游源码。
+- 不引上游 `krema-cli`：它是 picocli 终端外壳，编排逻辑和终端输出长在一起，上游也刻意不发它到 Maven。
+- 编排能力按 Gradle 方言在 `krema-cli-spi` 重建，上游接口形状作参考。
 - 本仓库用 Apache-2.0 许可，`NOTICE` 里留了与上游的关系说明。
 
 ## 模块
@@ -17,7 +18,7 @@ Krema 是一套 Java + 系统 WebView 的桌面框架，上游自带一个 `krem
 | 模块 | 职责 |
 |---|---|
 | `krema-gradle-plugin` | Gradle 插件薄壳：声明 task、绑定输入输出、实现 Gradle 差异 |
-| `krema-cli-spi` | 中间层：纯 Java 的编排契约与实现，不认识 Gradle 也不认识 Maven |
+| `krema-cli-spi` | 中间层：Kotlin 编排契约与实现，不认识 Gradle 也不认识 Maven |
 
 分层的意义：编排逻辑在不起 Gradle 的情况下就能单测。
 
@@ -37,7 +38,7 @@ Krema 是一套 Java + 系统 WebView 的桌面框架，上游自带一个 `krem
 
 ```kotlin
 plugins {
-    id("cnb.cool.birthcat.krema")
+    id("top.birthcat.kremaf.ext")
 }
 
 krema {
@@ -60,3 +61,52 @@ krema {
 | `kremaSignerSign` | signer sign |
 
 > 骨架阶段这些 task 尚未实现，用法随对应工单补齐。
+
+## 依赖
+
+插件与中间层发布到共享 maven registry：
+
+- 页面：https://cnb.cool/BirthCat-Dev/jars
+- 地址：`https://maven.cnb.cool/BirthCat-Dev/jars/-/packages/`
+- 坐标：`top.birthcat.kremaf-ext:krema-gradle-plugin`、`top.birthcat.kremaf-ext:krema-cli-spi`
+
+在 `settings.gradle.kts` 里加上仓库：
+
+```kotlin
+pluginManagement {
+    repositories {
+        maven {
+            url = uri("https://maven.cnb.cool/BirthCat-Dev/jars/-/packages/")
+            credentials {
+                username = "cnb"
+                password = providers.gradleProperty("cnbArtifactsGradlePassword").getOrElse("")
+            }
+        }
+    }
+}
+```
+
+本地或流水线里取令牌：
+
+```bash
+# 本地
+export cnbArtifactsGradlePassword=<你的访问令牌>
+# 云构建/云开发内置
+export cnbArtifactsGradlePassword=$CNB_TOKEN
+```
+
+## 发布
+
+版本号取自构建脚本里的 `project.version`，发布形态有两种，都在 CNB 页面的分支详情页按钮触发：
+
+| 形态 | 按钮 | 版本 | 说明 |
+|---|---|---|---|
+| Release | 发布 Release | 正式版本号 | 正式发布到 maven registry |
+| Snapshot | 发布 Snapshot | `*-SNAPSHOT` | 快照发布，同版本号可覆盖 |
+
+两个模块一起发布：`krema-gradle-plugin` 的 POM 依赖 `krema-cli-spi`，少发一个插件坐标就拉不通。
+
+## 云构建
+
+PR 与主干门禁跑 `./gradlew build spotlessCheck`。构建镜像在 `.cnb/build/Dockerfile`，
+Gradle 依赖缓存在构建节点上复用。端到端窗口测试与真打安装包走手动入口。

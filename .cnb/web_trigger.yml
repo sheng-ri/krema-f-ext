@@ -1,0 +1,13 @@
+# 按钮在所有分支可见：发布与自检都不依赖具体分支。
+branch:
+  - reg: ^.*$
+    buttons:
+      - name: 发布 Release
+        description: 发布正式版本到 maven registry（版本取代码里的 project.version）
+        event: web_trigger_release
+      - name: 发布 Snapshot
+        description: 发布快照版本到 maven registry
+        event: web_trigger_snapshot
+      - name: 工具链自检
+        description: 打印 JDK 与 Gradle 版本，确认构建环境可用
+        event: web_trigger
