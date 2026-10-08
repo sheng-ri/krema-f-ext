@@ -15,13 +15,12 @@
 ## 外部 skill
 
 - 涉及 Gradle API（`org.gradle.api` / `org.gradle.api.tasks` / `org.gradle.kotlin.dsl`）的改动，动手前必须先装对应版本的 skill。
-- skill 只从 npm registry 取，仓库不开 git 匿名读：
+- skill 只从 npm registry 取，仓库不开 git 匿名读；用 `npx skills add` 直接装 tarball，别走 `npm config set registry` + `npm install`：
 
 ```bash
-npm config set registry https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/
-npm install @birthcat-dev/gradle-plugin-tasks-9.8.0 \
-            @birthcat-dev/gradle-plugin-api-9.8.0 \
-            @birthcat-dev/gradle-kts-9.8.0
+npx skills add \
+  "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-api-9.8.0/-/@birthcat-dev/gradle-plugin-api-9.8.0-9.8.0.tgz" \
+  -g -a codebuddy -y
 ```
 
 - 版本号跟 Gradle 版本走（`gradle/wrapper/gradle-wrapper.properties`），升 Gradle 必须同步换 skill 版本。
