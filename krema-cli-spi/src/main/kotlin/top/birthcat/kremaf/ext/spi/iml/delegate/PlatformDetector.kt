@@ -55,6 +55,15 @@ enum class Platform {
     val libraryPrefix: String
         get() = if (this == WINDOWS) "" else "lib"
 
+    /** 动态库文件名后缀。 */
+    val librarySuffix: String
+        get() =
+            when (this) {
+                DARWIN -> ".dylib"
+                WINDOWS -> ".dll"
+                LINUX, UNKNOWN -> ".so"
+            }
+
     companion object {
         /** 由 `os.name` 判定平台族。 */
         fun of(osName: String): Platform {

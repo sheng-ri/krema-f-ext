@@ -16,7 +16,7 @@ abstract class KremaBuildTask : KremaProjectTask() {
         val project = kremaProject()
         val ports = ports()
         val classpath = ports.classpath(project)
-        ports.frontend().build(project, ports.env(project))
+        ports.frontend().build(project)
         ports.javaCompiler(outputDir.get().asFile.toPath()).compile(project, classpath)
     }
 }

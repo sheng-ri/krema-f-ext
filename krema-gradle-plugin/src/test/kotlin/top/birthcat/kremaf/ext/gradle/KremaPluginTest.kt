@@ -56,6 +56,34 @@ class KremaPluginTest {
         }
     }
 
+    /**
+     * native-image 是长跑动作，得有默认超时兜住卡死。
+     *
+     * 从真注册出来的 task 上读那个值，而不是读插件源码里的常量 —— 常量没接上就白写。
+     */
+    @Test
+    fun kremaBuildNativeHasADefaultTimeout(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            """
+            plugins { id("top.birthcat.kremaf.ext") }
+
+            tasks.register("showNativeTimeout") {
+                // 配置期取值，action 里只留一个 Duration —— 捕获 Task 对象会被 Configuration Cache 拦下。
+                val timeout = tasks.named("kremaBuildNative").get().timeout.get()
+                doLast { println("timeout=" + timeout) }
+            }
+            """.trimIndent(),
+        )
+
+        val result = runGradle(projectDir, "showNativeTimeout")
+
+        assertTrue(result.output.contains("timeout=PT30M"), "kremaBuildNative 没配默认超时：\n${result.output}")
+    }
+
     @Test
     fun kremaInitGeneratesSkeletonWithoutExistingToml(
         @TempDir projectDir: File,

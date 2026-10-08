@@ -5,7 +5,6 @@
 package top.birthcat.kremaf.ext.gradle
 
 import top.birthcat.kremaf.ext.spi.iml.delegate.BundleSupportFactoryDelegate
-import top.birthcat.kremaf.ext.spi.iml.delegate.DotEnvLoader
 import top.birthcat.kremaf.ext.spi.iml.delegate.JdkResolver
 import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NioAppDeployer
 import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NioCommandRunner
@@ -39,11 +38,9 @@ class KremaPorts(
 
     fun files(): FileSystem = fileSystem
 
-    fun env(project: KremaProject): Map<String, String> = DotEnvLoader(fileSystem).load(project.dir)
-
     fun frontend(): FrontendBuilder = NioFrontendBuilder(commandRunner)
 
-    fun javaCompiler(outputDir: Path): JavaCompiler = NioJavaCompiler(commandRunner, JdkResolver(commandRunner), outputDir)
+    fun javaCompiler(outputDir: Path): JavaCompiler = NioJavaCompiler(commandRunner, JdkResolver(commandRunner), outputDir, fileSystem)
 
     fun deployer(): AppDeployer = NioAppDeployer(fileSystem)
 
