@@ -90,6 +90,9 @@ class OrchestrationTest {
         assertEquals("demo", config.packageName)
         assertEquals("1.2.3", config.version)
 
+        // 前端命令归 Frontend；[build] 只留 out_dir / java_source_dir / main_class / assets_path。
+        assertEquals("dist", config.build.outDir)
+
         val env = DotEnvLoader(fs).load(dir, "dev")
         assertEquals("http://b", env["API_URL"])
     }

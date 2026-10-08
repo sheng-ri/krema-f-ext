@@ -34,6 +34,7 @@ data class KremaConfig(
     val description: String = "",
     val window: Window = Window(),
     val build: Build = Build(),
+    val frontend: Frontend = Frontend(),
     val bundle: Bundle = Bundle(),
     val permissions: List<String> = emptyList(),
     val updaterPubkey: String? = null,
@@ -52,11 +53,13 @@ data class Window(
     val decorations: Boolean = true,
 )
 
-/** 构建约定：前端命令、源码与资源目录、主类。 */
+/**
+ * 构建约定：源码与资源目录、主类。
+ *
+ * 前端命令不在这里 —— 它们是 [Frontend] 的字段。同一件事只留一个住所，
+ * 否则 loader 填一间、编排层读另一间，两间之间没有任何代码相连。
+ */
 data class Build(
-    val frontendCommand: String = "npm run build",
-    val frontendDevCommand: String = "npm run dev",
-    val frontendDevUrl: String = "http://localhost:5173",
     val outDir: String = "dist",
     val javaSourceDir: String = "src-java",
     val mainClass: String? = null,
