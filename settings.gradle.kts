@@ -1,6 +1,6 @@
 rootProject.name = "krema-f-ext"
 
-include("krema-cli-spi", "krema-gradle-plugin")
+include("krema-cli-spi", "krema-gradle-plugin", "krema-demo")
 
 pluginManagement {
     repositories {

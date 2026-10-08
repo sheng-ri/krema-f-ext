@@ -36,23 +36,43 @@ class NioAppDeployer(
         return bundleDir
     }
 
-    /** bundle 目录布局，按平台约定查表。 */
+    /**
+     * bundle 目录布局，按平台约定查表。
+     *
+     * 目录里带应用名的那几处由 [appName] 拼出，必须与平台 bundler 写的启动器里的 `-cp`
+     * 一致 —— 两处各写各的，应用就跑不起来（第二层验收会当场撞上）。
+     */
     private enum class Layout(
-        val jarsDir: String,
-        val classesDir: String,
-        val libsDir: String,
         val marker: String,
     ) {
-        MACOS("Contents/Resources/Java", "Contents/Resources/Java/classes", "Contents/Resources", ".app"),
-        LINUX("usr/share/krema/java", "usr/share/krema/java/classes", "usr/lib", ".AppDir"),
-        WINDOWS("java", "java/classes", "lib", ""),
+        MACOS(".app"),
+        LINUX(".AppDir"),
+        WINDOWS(""),
         ;
 
-        fun jarsDirIn(bundleDir: Path): Path = bundleDir.resolve(jarsDir)
+        fun jarsDirIn(bundleDir: Path): Path = bundleDir.resolve(jarsDir(appName(bundleDir)))
 
-        fun classesDirIn(bundleDir: Path): Path = bundleDir.resolve(classesDir)
+        fun classesDirIn(bundleDir: Path): Path = jarsDirIn(bundleDir).resolve("classes")
 
-        fun libsDirIn(bundleDir: Path): Path = bundleDir.resolve(libsDir)
+        fun libsDirIn(bundleDir: Path): Path =
+            when (this) {
+                MACOS -> bundleDir.resolve("Contents/Resources")
+                LINUX -> bundleDir.resolve("usr/lib")
+                WINDOWS -> bundleDir.resolve("lib")
+            }
+
+        private fun jarsDir(app: String): String =
+            when (this) {
+                MACOS -> "Contents/Resources/Java"
+                LINUX -> "usr/share/$app/java"
+                WINDOWS -> "java"
+            }
+
+        private fun appName(bundleDir: Path): String =
+            bundleDir.fileName
+                .toString()
+                .removeSuffix(marker)
+                .removeSuffix("-dev")
 
         companion object {
             fun of(bundleDir: Path): Layout {

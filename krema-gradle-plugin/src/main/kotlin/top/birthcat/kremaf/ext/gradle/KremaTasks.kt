@@ -7,6 +7,7 @@ package top.birthcat.kremaf.ext.gradle
 import org.gradle.api.Project
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildNativeTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
+import top.birthcat.kremaf.ext.gradle.task.KremaBundleRunTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
 import top.birthcat.kremaf.ext.gradle.task.KremaDevTask
 import top.birthcat.kremaf.ext.gradle.task.KremaInitTask
@@ -14,19 +15,34 @@ import top.birthcat.kremaf.ext.gradle.task.KremaSignerGenerateTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerSignTask
 import top.birthcat.kremaf.ext.spi.iml.delegate.PlatformDetector
 
-/** `krema` 分组下 7 张 task 的名字，TestKit 与 README 都从这里取。 */
+/** `krema` 分组下各张 task 的名字，TestKit 与 README 都从这里取。 */
 object KremaTaskNames {
     const val GROUP = "krema"
     const val INIT = "kremaInit"
     const val BUILD = "kremaBuild"
     const val BUILD_NATIVE = "kremaBuildNative"
-    const val BUNDLE = "kremaBundle"
+    const val BUNDLE_DEV = "kremaBundleDev"
+    const val BUNDLE_PROD = "kremaBundleProd"
+    const val BUNDLE_DEV_RUN = "kremaBundleDevRun"
+    const val BUNDLE_PROD_RUN = "kremaBundleProdRun"
     const val DEV = "kremaDev"
     const val SIGNER_GENERATE = "kremaSignerGenerate"
     const val SIGNER_SIGN = "kremaSignerSign"
 
     /** 全部 task 名，声明顺序即 `gradlew tasks` 里的出现顺序。 */
-    val ALL = listOf(INIT, BUILD, BUILD_NATIVE, BUNDLE, DEV, SIGNER_GENERATE, SIGNER_SIGN)
+    val ALL =
+        listOf(
+            INIT,
+            BUILD,
+            BUILD_NATIVE,
+            BUNDLE_DEV,
+            BUNDLE_PROD,
+            BUNDLE_DEV_RUN,
+            BUNDLE_PROD_RUN,
+            DEV,
+            SIGNER_GENERATE,
+            SIGNER_SIGN,
+        )
 }
 
 internal fun Project.registerKremaTasks() {
@@ -52,11 +68,40 @@ internal fun Project.registerKremaTasks() {
         task.configureProject(ext, frontend)
     }
 
-    tasks.register(KremaTaskNames.BUNDLE, KremaBundleTask::class.java) { task ->
+    tasks.register(KremaTaskNames.BUNDLE_DEV, KremaBundleTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "生成可分发的平台安装包"
+        task.description = "生成开发用 bundle（只够原生特性认出应用身份）"
         task.configureProject(ext, frontend)
         task.target.convention(currentTarget())
+        task.dev.convention(true)
+    }
+
+    tasks.register(KremaTaskNames.BUNDLE_PROD, KremaBundleTask::class.java) { task ->
+        task.group = KremaTaskNames.GROUP
+        task.description = "生成可分发的生产 bundle"
+        task.configureProject(ext, frontend)
+        task.target.convention(currentTarget())
+        task.dev.convention(false)
+    }
+
+    tasks.register(KremaTaskNames.BUNDLE_DEV_RUN, KremaBundleRunTask::class.java) { task ->
+        task.group = KremaTaskNames.GROUP
+        task.description = "跑 dev bundle（阻塞到窗口关，不进 CI 门禁）"
+        task.configureProject(ext, frontend)
+        task.target.convention(currentTarget())
+        task.dev.convention(true)
+        task.handshake.convention(false)
+        task.dependsOn(KremaTaskNames.BUNDLE_DEV)
+    }
+
+    tasks.register(KremaTaskNames.BUNDLE_PROD_RUN, KremaBundleRunTask::class.java) { task ->
+        task.group = KremaTaskNames.GROUP
+        task.description = "跑生产 bundle（阻塞到窗口关）"
+        task.configureProject(ext, frontend)
+        task.target.convention(currentTarget())
+        task.dev.convention(false)
+        task.handshake.convention(false)
+        task.dependsOn(KremaTaskNames.BUNDLE_PROD)
     }
 
     tasks.register(KremaTaskNames.DEV, KremaDevTask::class.java) { task ->

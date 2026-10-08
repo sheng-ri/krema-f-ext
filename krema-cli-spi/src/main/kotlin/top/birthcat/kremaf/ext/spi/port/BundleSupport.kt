@@ -35,30 +35,48 @@ interface BundleSupport {
     val requiresBundleForNativeFeatures: Boolean
 
     /**
-     * 生成开发用 bundle，只够原生特性认出应用身份。
+     * 生成 bundle。
+     *
+     * dev / prod 两个编年收成一条：mac 手搓 `.app` 的 `KremaDev` 键随 [dev] 走，
+     * 其余平台两种编年同形。
      *
      * @param settings 打包输入
-     * @return 启动器所在路径
-     */
-    fun createDevBundle(settings: BundleSettings): Path
-
-    /**
-     * 生成可分发的生产 bundle。
-     *
-     * @param settings 打包输入
+     * @param dev true 出开发用 bundle，false 出可分发的生产 bundle
      * @return bundle 根目录，macOS 上是 `.app` 目录
      */
-    fun createProductionBundle(settings: BundleSettings): Path
+    fun createBundle(
+        settings: BundleSettings,
+        dev: Boolean,
+    ): Path
 
     /**
      * 通过 bundle 启动应用。
      *
-     * @param bundlePath bundle 根目录
-     * @param env 传给应用的额外环境变量
+     * 环境变量不进签名：调用方塞给 `ProcessBuilder.environment()`，这里只认 [LaunchSettings]。
+     *
+     * @param settings 启动输入
      * @return 应用进程句柄
      */
-    fun launch(
-        bundlePath: Path,
-        env: Map<String, String>,
-    ): Process
+    fun run(settings: LaunchSettings): Process
 }
+
+/**
+ * 启动一个已打好的 bundle 所需的全部输入。
+ *
+ * 与 [BundleSettings] 并列住 port：打包与启动是两个动作，输入不混。
+ *
+ * @property bundlePath bundle 根目录，[BundleSupport.createBundle] 的返回值
+ * @property classpath 应用启动时的 `-cp` 条目
+ * @property mainClass 主类，覆盖 bundle 里写死的那个
+ * @property devUrl 前端 dev server 地址，dev 启动时透传给应用
+ * @property libPath 原生库目录，可能不存在
+ * @property handshake true 时转 `Pipe` 判握手标志行再把流接回终端，false 时 `inheritIO()`
+ */
+data class LaunchSettings(
+    val bundlePath: Path,
+    val classpath: List<Path>,
+    val mainClass: String,
+    val devUrl: String? = null,
+    val libPath: Path? = null,
+    val handshake: Boolean = false,
+)

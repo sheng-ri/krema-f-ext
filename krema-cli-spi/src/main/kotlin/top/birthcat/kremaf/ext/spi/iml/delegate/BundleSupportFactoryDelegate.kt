@@ -8,6 +8,7 @@ import top.birthcat.kremaf.ext.spi.port.BundleSettings
 import top.birthcat.kremaf.ext.spi.port.BundleSupport
 import top.birthcat.kremaf.ext.spi.port.BundleSupportFactory
 import top.birthcat.kremaf.ext.spi.port.FileSystem
+import top.birthcat.kremaf.ext.spi.port.LaunchSettings
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -35,30 +36,37 @@ private class MacOSBundleSupport(
 ) : BundleSupport {
     override val requiresBundleForNativeFeatures: Boolean = true
 
-    override fun createDevBundle(settings: BundleSettings): Path {
-        val bundleDir = outputDir(settings).resolve("${settings.appName}-dev.app")
+    override fun createBundle(
+        settings: BundleSettings,
+        dev: Boolean,
+    ): Path {
+        val bundleDir = outputDir(settings).resolve(bundleName(settings, dev))
         val macOSDir = bundleDir.resolve("Contents/MacOS")
-        fileSystem.writeText(bundleDir.resolve("Contents/Info.plist"), infoPlist(settings, dev = true))
-        fileSystem.writeText(macOSDir.resolve(settings.appName), launcher(settings, dev = true))
+        fileSystem.writeText(bundleDir.resolve("Contents/Info.plist"), infoPlist(settings, dev))
+        fileSystem.writeText(macOSDir.resolve(settings.appName), launcher(settings, dev))
         fileSystem.markExecutable(macOSDir.resolve(settings.appName))
         return bundleDir
     }
 
-    override fun createProductionBundle(settings: BundleSettings): Path {
-        val bundleDir = outputDir(settings).resolve("${settings.appName}.app")
-        val macOSDir = bundleDir.resolve("Contents/MacOS")
-        fileSystem.writeText(bundleDir.resolve("Contents/Info.plist"), infoPlist(settings, dev = false))
-        fileSystem.writeText(macOSDir.resolve(settings.appName), launcher(settings, dev = false))
-        fileSystem.markExecutable(macOSDir.resolve(settings.appName))
-        return bundleDir
-    }
+    /** 直接 exec `.app` 里的启动器，不起 `open` —— 多一个 `open` 进程会把 stdout 管道截断，握手判不到。 */
+    override fun run(settings: LaunchSettings): Process = processFor(launcherCommand(settings), settings)
 
-    override fun launch(
-        bundlePath: Path,
-        env: Map<String, String>,
-    ): Process {
-        val launcher = bundlePath.resolve("Contents/MacOS").resolve(bundlePath.fileName.toString().removeSuffix(".app"))
-        return ProcessBuilder(launcher.toAbsolutePath().toString()).inheritIO().start()
+    private fun bundleName(
+        settings: BundleSettings,
+        dev: Boolean,
+    ): String = if (dev) "${settings.appName}-dev.app" else "${settings.appName}.app"
+
+    private fun launcherCommand(settings: LaunchSettings): List<String> {
+        val launcher =
+            settings.bundlePath
+                .resolve("Contents/MacOS")
+                .resolve(
+                    settings.bundlePath.fileName
+                        .toString()
+                        .removeSuffix(".app")
+                        .removeSuffix("-dev"),
+                )
+        return listOf(launcher.toAbsolutePath().toString())
     }
 
     private fun infoPlist(
@@ -89,7 +97,7 @@ private class MacOSBundleSupport(
             |#!/bin/bash
             |DIR="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
             |export KREMA_MAIN_CLASS="${settings.mainClass}"
-            |exec java --enable-native-access=ALL-UNNAMED -cp "${'$'}DIR/$resources/Java/*" "${settings.mainClass}" "${'$'}@"
+            |exec java --enable-native-access=ALL-UNNAMED -cp "${'$'}DIR/$resources/Java/*:${'$'}DIR/$resources/Java/classes" "${settings.mainClass}" "${'$'}@"
             |
             """.trimMargin()
     }
@@ -104,23 +112,21 @@ private class WindowsBundleSupport(
 ) : BundleSupport {
     override val requiresBundleForNativeFeatures: Boolean = false
 
-    override fun createDevBundle(settings: BundleSettings): Path = createProductionBundle(settings)
-
-    override fun createProductionBundle(settings: BundleSettings): Path {
+    override fun createBundle(
+        settings: BundleSettings,
+        dev: Boolean,
+    ): Path {
         val bundleDir = outputDir(settings)
         fileSystem.writeText(
             bundleDir.resolve("${settings.appName}.bat"),
-            "@echo off\r\njava --enable-native-access=ALL-UNNAMED -cp \"%~dp0java\\*\" ${settings.mainClass} %*\r\n",
+            "@echo off\r\njava --enable-native-access=ALL-UNNAMED -cp \"%~dp0java\\*;%~dp0java\\classes\" ${settings.mainClass} %*\r\n",
         )
         return bundleDir
     }
 
-    override fun launch(
-        bundlePath: Path,
-        env: Map<String, String>,
-    ): Process {
-        val launcher = bundlePath.resolve(bundlePath.fileName.toString() + ".bat")
-        return ProcessBuilder("cmd", "/c", launcher.toAbsolutePath().toString()).inheritIO().start()
+    override fun run(settings: LaunchSettings): Process {
+        val launcher = settings.bundlePath.resolve(settings.bundlePath.fileName.toString() + ".bat")
+        return processFor(listOf("cmd", "/c", launcher.toAbsolutePath().toString()), settings)
     }
 
     private fun outputDir(settings: BundleSettings): Path = Files.createDirectories(settings.outputDir)
@@ -133,16 +139,17 @@ private class LinuxBundleSupport(
 ) : BundleSupport {
     override val requiresBundleForNativeFeatures: Boolean = false
 
-    override fun createDevBundle(settings: BundleSettings): Path = createProductionBundle(settings)
-
-    override fun createProductionBundle(settings: BundleSettings): Path {
+    override fun createBundle(
+        settings: BundleSettings,
+        dev: Boolean,
+    ): Path {
         val appDir = outputDir(settings).resolve("${settings.appName}.AppDir")
         val shareDir = appDir.resolve("usr/share/${settings.appName}/java")
         fileSystem.writeText(appDir.resolve("AppRun"), "#!/bin/bash\nexec \"\$(dirname \"\$0\")/usr/bin/${settings.appName}\" \"\$@\"\n")
         fileSystem.markExecutable(appDir.resolve("AppRun"))
         fileSystem.writeText(
             appDir.resolve("usr/bin/${settings.appName}"),
-            "#!/bin/bash\nexec java --enable-native-access=ALL-UNNAMED -cp \"$(dirname \"\$0\")/../share/${settings.appName}/java/*\" ${settings.mainClass} \"\$@\"\n",
+            "#!/bin/bash\nexec java --enable-native-access=ALL-UNNAMED -cp \"$(dirname \"\$0\")/../share/${settings.appName}/java/*:$(dirname \"\$0\")/../share/${settings.appName}/java/classes\" ${settings.mainClass} \"\$@\"\n",
         )
         fileSystem.markExecutable(appDir.resolve("usr/bin/${settings.appName}"))
         fileSystem.writeText(appDir.resolve("${settings.appName.lowercase()}.desktop"), desktopFile(settings))
@@ -150,10 +157,16 @@ private class LinuxBundleSupport(
         return appDir
     }
 
-    override fun launch(
-        bundlePath: Path,
-        env: Map<String, String>,
-    ): Process = ProcessBuilder(bundlePath.resolve("AppRun").toAbsolutePath().toString()).inheritIO().start()
+    override fun run(settings: LaunchSettings): Process =
+        processFor(
+            listOf(
+                settings.bundlePath
+                    .resolve("AppRun")
+                    .toAbsolutePath()
+                    .toString(),
+            ),
+            settings,
+        )
 
     private fun desktopFile(settings: BundleSettings) =
         """
