@@ -35,6 +35,14 @@ interface BundleSupport {
     val requiresBundleForNativeFeatures: Boolean
 
     /**
+     * 生产 bundle 是否还要调用方自己把 classpath 摊进去。
+     *
+     * macOS 手搓 `.app`，布局由本模块定，所以要 `true`；Windows / Linux 交 jpackage，
+     * runtime 镜像它自己装，调用方再摊一遍只会往安装包旁边倒垃圾。
+     */
+    val deploysClasspath: Boolean
+
+    /**
      * 生成开发用 bundle，只够原生特性认出应用身份。
      *
      * @param settings 打包输入

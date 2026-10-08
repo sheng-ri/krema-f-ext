@@ -27,6 +27,7 @@ import top.birthcat.kremaf.ext.spi.port.KremaProject
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.inject.Inject
+import top.birthcat.kremaf.ext.spi.port.Classpath as ClasspathPort
 
 /**
  * 所有 Krema task 的公共输入。
@@ -103,8 +104,12 @@ abstract class KremaProjectTask : DefaultTask() {
     /** `krema.toml` 路径，未配置时取项目根下同名文件。 */
     protected fun configPath(): Path = Path.of(configFilePath.get())
 
-    /** 解析后的项目输入，编排层的统一入口。 */
-    protected fun kremaProject(): KremaProject {
+    /**
+     * 解析后的项目输入，编排层的统一入口。
+     *
+     * @param classpath 要打包的 runtime classpath，jpackage 的 `--input` 直接吃它
+     */
+    protected fun kremaProject(classpath: ClasspathPort? = null): KremaProject {
         val dir = projectPath()
         val config = loadConfig(configPath())
         val build = config.build
@@ -126,6 +131,7 @@ abstract class KremaProjectTask : DefaultTask() {
                     mainClass = mainClass.orNull ?: build.mainClass ?: "${config.identifier}.Main",
                     icon = config.bundle.icon?.let(dir::resolve),
                     deepLinkSchemes = config.deepLinkSchemes,
+                    classpath = classpath,
                 ),
         )
     }

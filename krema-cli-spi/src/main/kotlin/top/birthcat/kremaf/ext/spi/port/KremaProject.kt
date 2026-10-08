@@ -105,7 +105,12 @@ data class Frontend(
     val workingDir: Path? = null,
 )
 
-/** 打包输入：产物名、图标与深链。 */
+/**
+ * 打包输入：产物名、图标、深链与待打包的 classpath。
+ *
+ * [classpath] 一并住在这里而不是另开参数：jpackage 的 `--input` 要的正是 jar 与原生库，
+ * 交给 bundler 自己摊平，编排层就不必再记「先 deploy 还是先 bundle」。
+ */
 data class BundleSettings(
     val appName: String = "krema-app",
     val outputDir: Path = Path.of("."),
@@ -114,4 +119,5 @@ data class BundleSettings(
     val mainClass: String = "com.example.app.Main",
     val icon: Path? = null,
     val deepLinkSchemes: List<String> = emptyList(),
+    val classpath: Classpath? = null,
 )

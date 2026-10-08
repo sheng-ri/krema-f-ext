@@ -49,7 +49,7 @@ class KremaPorts(
 
     fun signer(): Signer = NioSigner()
 
-    fun bundleFactory(): BundleSupportFactory = BundleSupportFactoryDelegate(fileSystem)
+    fun bundleFactory(): BundleSupportFactory = BundleSupportFactoryDelegate(fileSystem, commandRunner)
 
     fun classpath(project: KremaProject): Classpath = classpathResolver.resolve(project)
 }

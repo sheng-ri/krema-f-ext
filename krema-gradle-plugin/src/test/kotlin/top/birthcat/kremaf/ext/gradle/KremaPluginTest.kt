@@ -135,9 +135,17 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
+        // 钉 darwin：手搓 `.app`，不碰 jpackage —— 门禁机器上不一定有 jpackage 工具链，
+        // 真 `.deb` 验收在 web_trigger 手动入口（见 #27）。
         Files.writeString(
             projectDir.toPath().resolve("build.gradle.kts"),
-            """plugins { id("top.birthcat.kremaf.ext") }""",
+            """
+            plugins { id("top.birthcat.kremaf.ext") }
+
+            tasks.named<top.birthcat.kremaf.ext.gradle.task.KremaBundleTask>("kremaBundle") {
+                target.set("darwin-aarch64")
+            }
+            """.trimIndent(),
         )
         writeToml(projectDir)
 
@@ -147,10 +155,10 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/krema")
+                .resolve("build/krema/consumer-app.app/Contents/Info.plist")
                 .toFile()
-                .exists(),
-            "kremaBundle 没落产物目录",
+                .isFile,
+            "kremaBundle 没落 macOS bundle",
         )
     }
 

@@ -1,6 +1,13 @@
-# 云构建门禁镜像：只装 JDK 25。
+# 云构建门禁镜像：JDK 25 + jpackage 打 .deb 要的外部工具。
 # Gradle 由 wrapper 自带，镜像里不必再装一份。
 FROM cnbcool/default-build-env:latest
+
+# fakeroot / objcopy 是 `jpackage --type deb` 的硬依赖，缺了它 bundler 直接 skip；
+# desktop-file-utils 供 jpackage 校验 .desktop。见 #27 的真产物验收。
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends fakeroot binutils desktop-file-utils; \
+    rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
     ARCH="$(dpkg --print-architecture)"; \

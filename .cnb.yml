@@ -65,3 +65,16 @@ $:
           script:
             - java -version
             - ./gradlew --version
+
+  # 手动入口：Linux 真产物验收。
+  #
+  # 不进 PR 门禁 —— jpackage 会把整个 runtime（几百 MB）打进 .deb，每次 push 都跑太贵（见 #27）。
+  # 这里真打一个 .deb 并验包，是「Linux 打包路径真接通」的唯一硬证据。
+  web_trigger_bundle_deb:
+    - name: Linux .deb 真打包验收
+      <<: *pipeline
+      stages:
+        - *verify
+        - name: 真打 .deb
+          script:
+            - .cnb/scripts/deb-smoke.sh

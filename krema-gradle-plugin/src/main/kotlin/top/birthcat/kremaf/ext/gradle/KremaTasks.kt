@@ -5,6 +5,7 @@
 package top.birthcat.kremaf.ext.gradle
 
 import org.gradle.api.Project
+import org.gradle.api.tasks.SourceSetContainer
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildNativeTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
@@ -93,7 +94,15 @@ internal fun KremaProjectTask.configureProject(
         ext.configFile.orElse(project.layout.projectDirectory.file("krema.toml")).map { it.asFile.absolutePath },
     )
     outputDir.convention(ext.outputDir.orElse(project.layout.buildDirectory.dir("krema")))
-    classOutputDir.convention(project.layout.buildDirectory.dir("classes/kotlin/main"))
+    // 应用自己的输出不属于自己的 runtimeClasspath，得单独接上。
+    // java 插件在就取 main source set 的输出；不在（裸 Kotlin）就退到 Kotlin 约定目录。
+    if (project.plugins.hasPlugin("java")) {
+        val main = project.extensions.getByType(SourceSetContainer::class.java).getByName("main")
+        classOutputDir.convention(main.java.destinationDirectory)
+        runtimeClasspath.from(main.output)
+    } else {
+        classOutputDir.convention(project.layout.buildDirectory.dir("classes/kotlin/main"))
+    }
     project.configurations.findByName("runtimeClasspath")?.let(runtimeClasspath::from)
     frontendBuildCommand.convention(frontend.buildCommand)
     frontendDevCommand.convention(frontend.devCommand)

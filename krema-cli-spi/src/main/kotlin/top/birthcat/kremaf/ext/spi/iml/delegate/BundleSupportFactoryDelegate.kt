@@ -7,6 +7,7 @@ package top.birthcat.kremaf.ext.spi.iml.delegate
 import top.birthcat.kremaf.ext.spi.port.BundleSettings
 import top.birthcat.kremaf.ext.spi.port.BundleSupport
 import top.birthcat.kremaf.ext.spi.port.BundleSupportFactory
+import top.birthcat.kremaf.ext.spi.port.CommandRunner
 import top.birthcat.kremaf.ext.spi.port.FileSystem
 import java.nio.file.Files
 import java.nio.file.Path
@@ -18,12 +19,17 @@ import java.nio.file.Path
  */
 class BundleSupportFactoryDelegate(
     private val fileSystem: FileSystem,
+    private val commandRunner: CommandRunner,
 ) : BundleSupportFactory {
     override fun create(target: String): BundleSupport =
         when (target.substringBefore('-')) {
+            // macOS 手搓 `.app`，不碰 jpackage —— dev 流程硬依赖它，见 #27。
             "darwin" -> MacOSBundleSupport(fileSystem, target)
-            "windows" -> WindowsBundleSupport(fileSystem, target)
-            "linux" -> LinuxBundleSupport(fileSystem, target)
+
+            "windows" -> WindowsBundleSupport(fileSystem, target, commandRunner)
+
+            "linux" -> LinuxBundleSupport(fileSystem, target, commandRunner)
+
             else -> throw UnsupportedOperationException("无法为 '$target' 选择 bundler")
         }
 }
@@ -34,6 +40,8 @@ private class MacOSBundleSupport(
     override val target: String,
 ) : BundleSupport {
     override val requiresBundleForNativeFeatures: Boolean = true
+
+    override val deploysClasspath: Boolean = true
 
     override fun createDevBundle(settings: BundleSettings): Path {
         val bundleDir = outputDir(settings).resolve("${settings.appName}-dev.app")
@@ -97,73 +105,77 @@ private class MacOSBundleSupport(
     private fun outputDir(settings: BundleSettings): Path = Files.createDirectories(settings.outputDir)
 }
 
-/** Windows：目录 + `.bat` 启动器。 */
+/** Windows：jpackage `--type exe`。 */
 private class WindowsBundleSupport(
     private val fileSystem: FileSystem,
     override val target: String,
+    commandRunner: CommandRunner,
 ) : BundleSupport {
+    private val jpackage = JpackageRunner(commandRunner, fileSystem)
+
     override val requiresBundleForNativeFeatures: Boolean = false
+
+    override val deploysClasspath: Boolean = false
 
     override fun createDevBundle(settings: BundleSettings): Path = createProductionBundle(settings)
 
-    override fun createProductionBundle(settings: BundleSettings): Path {
-        val bundleDir = outputDir(settings)
-        fileSystem.writeText(
-            bundleDir.resolve("${settings.appName}.bat"),
-            "@echo off\r\njava --enable-native-access=ALL-UNNAMED -cp \"%~dp0java\\*\" ${settings.mainClass} %*\r\n",
+    override fun createProductionBundle(settings: BundleSettings): Path =
+        jpackage.run(
+            settings = settings,
+            type = "exe",
+            destDir = settings.outputDir.resolve("windows"),
+            extraArgs = WINDOWS_INSTALLER_OPTIONS,
         )
-        return bundleDir
-    }
 
     override fun launch(
         bundlePath: Path,
         env: Map<String, String>,
     ): Process {
-        val launcher = bundlePath.resolve(bundlePath.fileName.toString() + ".bat")
-        return ProcessBuilder("cmd", "/c", launcher.toAbsolutePath().toString()).inheritIO().start()
+        val launcher = bundlePath.resolve(bundlePath.fileName.toString() + ".exe")
+        return ProcessBuilder(launcher.toAbsolutePath().toString()).inheritIO().start()
     }
 
-    private fun outputDir(settings: BundleSettings): Path = Files.createDirectories(settings.outputDir)
+    private companion object {
+        private val WINDOWS_INSTALLER_OPTIONS = listOf("--win-dir-chooser", "--win-shortcut", "--win-menu")
+    }
 }
 
-/** Linux：AppDir 结构，`AppRun` 是入口。 */
+/** Linux：jpackage `--type deb`。 */
 private class LinuxBundleSupport(
     private val fileSystem: FileSystem,
     override val target: String,
+    commandRunner: CommandRunner,
 ) : BundleSupport {
+    private val jpackage = JpackageRunner(commandRunner, fileSystem)
+
     override val requiresBundleForNativeFeatures: Boolean = false
+
+    override val deploysClasspath: Boolean = false
 
     override fun createDevBundle(settings: BundleSettings): Path = createProductionBundle(settings)
 
-    override fun createProductionBundle(settings: BundleSettings): Path {
-        val appDir = outputDir(settings).resolve("${settings.appName}.AppDir")
-        val shareDir = appDir.resolve("usr/share/${settings.appName}/java")
-        fileSystem.writeText(appDir.resolve("AppRun"), "#!/bin/bash\nexec \"\$(dirname \"\$0\")/usr/bin/${settings.appName}\" \"\$@\"\n")
-        fileSystem.markExecutable(appDir.resolve("AppRun"))
-        fileSystem.writeText(
-            appDir.resolve("usr/bin/${settings.appName}"),
-            "#!/bin/bash\nexec java --enable-native-access=ALL-UNNAMED -cp \"$(dirname \"\$0\")/../share/${settings.appName}/java/*\" ${settings.mainClass} \"\$@\"\n",
+    override fun createProductionBundle(settings: BundleSettings): Path =
+        jpackage.run(
+            settings = settings,
+            type = "deb",
+            destDir = settings.outputDir.resolve("linux"),
+            extraArgs = LINUX_INSTALLER_OPTIONS,
         )
-        fileSystem.markExecutable(appDir.resolve("usr/bin/${settings.appName}"))
-        fileSystem.writeText(appDir.resolve("${settings.appName.lowercase()}.desktop"), desktopFile(settings))
-        fileSystem.writeText(shareDir.resolve(".keep"), "")
-        return appDir
-    }
 
     override fun launch(
         bundlePath: Path,
         env: Map<String, String>,
-    ): Process = ProcessBuilder(bundlePath.resolve("AppRun").toAbsolutePath().toString()).inheritIO().start()
+    ): Process =
+        ProcessBuilder(
+            bundlePath
+                .resolve("bin")
+                .resolve(bundlePath.fileName.toString())
+                .toAbsolutePath()
+                .toString(),
+        ).inheritIO()
+            .start()
 
-    private fun desktopFile(settings: BundleSettings) =
-        """
-        [Desktop Entry]
-        Name=${settings.appName}
-        Exec=${settings.appName}${if (settings.deepLinkSchemes.isEmpty()) "" else " %u"}
-        Type=Application
-        Terminal=false
-        Categories=Utility;
-        """.trimIndent()
-
-    private fun outputDir(settings: BundleSettings): Path = Files.createDirectories(settings.outputDir)
+    private companion object {
+        private val LINUX_INSTALLER_OPTIONS = listOf("--linux-shortcut")
+    }
 }
