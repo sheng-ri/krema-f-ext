@@ -26,12 +26,12 @@ abstract class KremaBundleTask : KremaProjectTask() {
     @TaskAction
     fun bundle() {
         val ports = ports()
-        // classpath 先解析，再进 BundleSettings：jpackage 的 `--input` 吃的就是它，
-        // bundler 自己摊平，编排层不必记顺序。
-        val classpath = ports.classpath(kremaProject())
-        val project = kremaProject(classpath)
+        // classpath 回填进 BundleSettings：jpackage 的 `--input` 吃的就是它，bundler 自己摊平，
+        // 编排层不必记顺序；先建 project 再补 classpath，只为让 loadConfig 少跑一遍。
+        val project = kremaProject()
+        val classpath = ports.classpath(project)
         val bundler = ports.bundleFactory().create(platform.getOrElse(PlatformDetector.currentTarget()))
-        val bundleDir = bundler.createProductionBundle(project.bundle)
+        val bundleDir = bundler.createProductionBundle(project.bundle.copy(classpath = classpath))
         // jpackage 的 runtime 镜像自带 jar，再摊一遍只会往安装包旁边倒垃圾。
         if (bundler.deploysClasspath) {
             ports.deployer().deploy(project, bundleDir, classpath)

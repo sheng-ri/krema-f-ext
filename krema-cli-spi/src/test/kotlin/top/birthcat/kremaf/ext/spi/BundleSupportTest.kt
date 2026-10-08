@@ -6,6 +6,7 @@ package top.birthcat.kremaf.ext.spi
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -103,6 +104,94 @@ class BundleSupportTest {
         assertOption(jarCall, "--main-class", "com.example.Main")
         assertTrue(optionValue(jarCall, "--file").endsWith("krema-app.jar"), jarCall.toString())
         assertOption(runner.lastCommand(), "--main-jar", "krema-app.jar")
+    }
+
+    @Test
+    fun windowsLaunchesInstallerExeBySuffix(
+        @TempDir root: Path,
+    ) {
+        val dest = defaultOutput(root).resolve("windows").also { Files.createDirectories(it) }
+        // `--dest` 里躺的是带版本号的安装器，不是 `<name>.exe`。
+        val installer = dest.resolve("krema-app-1.2.3.exe")
+        fs.writeText(installer, "#!/bin/sh\n")
+        fs.markExecutable(installer)
+
+        val process =
+            BundleSupportFactoryDelegate(fs, RecordingCommandRunner(root))
+                .create("windows-x86_64")
+                .launch(dest, mapOf("KREMA_PROFILE" to "test"))
+
+        assertTrue(process.isAlive, "启动器没被 exec 起来")
+        process.destroyForcibly()
+    }
+
+    @Test
+    fun launchPassesExtraEnvToChild(
+        @TempDir root: Path,
+    ) {
+        val dest = defaultOutput(root).resolve("windows").also { Files.createDirectories(it) }
+        val dump = root.resolve("env.txt")
+        val installer = dest.resolve("krema-app-1.2.3.exe")
+        // 用绝对路径当输出位置：脚本拿不到 env 就会写空，断言能抓到回归。
+        fs.writeText(installer, "#!/bin/sh\nprintenv KREMA_PROFILE > ${'$'}KREMA_DUMP\n")
+        fs.markExecutable(installer)
+
+        val process =
+            BundleSupportFactoryDelegate(fs, RecordingCommandRunner(root))
+                .create("windows-x86_64")
+                .launch(dest, mapOf("KREMA_PROFILE" to "test", "KREMA_DUMP" to dump.toString()))
+
+        process.waitFor()
+        // 额外环境变量真进了子进程 —— 契约注释写了「传给应用」，就得真传。
+        assertEquals("test", Files.readString(dump).trim())
+    }
+
+    /**
+     * macOS 上 [env] 靠 `.krema-env` 中转，启动器脚本 source 它。
+     *
+     * 真起 `open` 得有 Launch Services，所以这里验「中转文件落盘」+「启动器真 source 它」两头：
+     * 只落盘不 source，就是又一次静默吞 env。
+     */
+    @Test
+    fun macOsLaunchStagesEnvForTheLauncher(
+        @TempDir root: Path,
+    ) {
+        val bundler = BundleSupportFactoryDelegate(fs, RecordingCommandRunner(root)).create("darwin-aarch64")
+        val bundleDir = bundler.createProductionBundle(stagedSettings(root, "krema-app"))
+
+        assertTrue(
+            Files.readString(bundleDir.resolve("Contents/MacOS/krema-app")).contains(".krema-env"),
+            "启动器没 source .krema-env，env 就进不去应用",
+        )
+    }
+
+    @Test
+    fun windowsLaunchFailsWhenNoExeInBundle(
+        @TempDir root: Path,
+    ) {
+        val dest = defaultOutput(root).resolve("windows").also { Files.createDirectories(it) }
+
+        assertThrows(UnsupportedOperationException::class.java) {
+            BundleSupportFactoryDelegate(fs, RecordingCommandRunner(root))
+                .create("windows-x86_64")
+                .launch(dest, emptyMap())
+        }
+    }
+
+    @Test
+    fun linuxLaunchRefusesDebInstaller(
+        @TempDir root: Path,
+    ) {
+        val deb = defaultOutput(root).resolve("linux").also { Files.createDirectories(it) }
+
+        // 产物是一个 .deb 文件，不是带 bin/ 的目录树 —— 别留一个永远不存在的路径。
+        val thrown =
+            assertThrows(UnsupportedOperationException::class.java) {
+                BundleSupportFactoryDelegate(fs, RecordingCommandRunner(root))
+                    .create("linux-x86_64")
+                    .launch(deb, emptyMap())
+            }
+        assertTrue(thrown.message!!.contains(".deb"), thrown.message!!)
     }
 
     @Test

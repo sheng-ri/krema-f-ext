@@ -7,8 +7,8 @@ package top.birthcat.kremaf.ext.spi.iml.delegate
 import top.birthcat.kremaf.ext.spi.port.BundleSettings
 import top.birthcat.kremaf.ext.spi.port.Classpath
 import top.birthcat.kremaf.ext.spi.port.CommandRunner
+import top.birthcat.kremaf.ext.spi.port.ExecutableJar
 import top.birthcat.kremaf.ext.spi.port.FileSystem
-import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -25,6 +25,8 @@ class JpackageRunner(
     private val commandRunner: CommandRunner,
     private val fileSystem: FileSystem,
 ) {
+    private val executableJar = ExecutableJar(fileSystem, commandRunner)
+
     /**
      * 打一个安装包。
      *
@@ -98,37 +100,9 @@ class JpackageRunner(
 
         val mainJarName = "${settings.appName}.jar"
         if (jars.none { it.fileName.toString() == mainJarName }) {
-            buildMainJar(inputDir.resolve(mainJarName), classpath.classOutputDir, settings.mainClass)
+            executableJar.build(inputDir.resolve(mainJarName), classpath.classOutputDir, settings.mainClass)
         }
         return mainJarName
-    }
-
-    /** 把编译输出压成 `--main-jar` 认识的那种 jar，manifest 带上主类。 */
-    private fun buildMainJar(
-        output: Path,
-        classesDir: Path,
-        mainClass: String,
-    ) {
-        check(Files.isDirectory(classesDir)) {
-            "编译输出目录不存在：$classesDir —— 先跑一次编译，或把 krema.toml 的 [build].java_source_dir 指对"
-        }
-        val jar = jdk().resolve(jarBinary())
-        val exit =
-            commandRunner.exec(
-                listOf(
-                    jar.toString(),
-                    "--create",
-                    "--file",
-                    output.toString(),
-                    "--main-class",
-                    mainClass,
-                    "-C",
-                    classesDir.toString(),
-                    ".",
-                ),
-                classesDir,
-            )
-        check(exit == 0) { "jar 打包失败，退出码 $exit" }
     }
 
     /** `jpackage` 所在目录，优先 JDK 25，退到 PATH。 */
@@ -137,8 +111,6 @@ class JpackageRunner(
             ?: error("找不到 jpackage，打包要 JDK 16+ 的 jpackage")
 
     private fun jpackageBinary(): String = if (isWindows()) "jpackage.exe" else "jpackage"
-
-    private fun jarBinary(): String = if (isWindows()) "jar.exe" else "jar"
 
     private fun isWindows(): Boolean = System.getProperty("os.name").lowercase().contains("win")
 

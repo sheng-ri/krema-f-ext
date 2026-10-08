@@ -24,11 +24,11 @@ class BundleSupportFactoryDelegate(
     override fun create(target: String): BundleSupport =
         when (target.substringBefore('-')) {
             // macOS 手搓 `.app`，不碰 jpackage —— dev 流程硬依赖它，见 #27。
-            "darwin" -> MacOSBundleSupport(fileSystem, target)
+            "darwin" -> MacOSBundleSupport(fileSystem)
 
-            "windows" -> WindowsBundleSupport(fileSystem, target, commandRunner)
+            "windows" -> WindowsBundleSupport(fileSystem, commandRunner)
 
-            "linux" -> LinuxBundleSupport(fileSystem, target, commandRunner)
+            "linux" -> LinuxBundleSupport(fileSystem, commandRunner)
 
             else -> throw UnsupportedOperationException("无法为 '$target' 选择 bundler")
         }
@@ -37,7 +37,6 @@ class BundleSupportFactoryDelegate(
 /** macOS：`.app` 目录，原生特性必须有正经 bundle 标识。 */
 private class MacOSBundleSupport(
     private val fileSystem: FileSystem,
-    override val target: String,
 ) : BundleSupport {
     override val requiresBundleForNativeFeatures: Boolean = true
 
@@ -61,12 +60,20 @@ private class MacOSBundleSupport(
         return bundleDir
     }
 
+    /**
+     * 走 Launch Services（`open -a`）而不是直接 exec 启动器脚本。
+     *
+     * `open` 起不了子进程环境，环境变量改由 `.krema-env` 中转；启动器脚本 source 它，
+     * 所以 [env] 仍然到得了应用。
+     */
     override fun launch(
         bundlePath: Path,
         env: Map<String, String>,
     ): Process {
-        val launcher = bundlePath.resolve("Contents/MacOS").resolve(bundlePath.fileName.toString().removeSuffix(".app"))
-        return ProcessBuilder(launcher.toAbsolutePath().toString()).inheritIO().start()
+        fileSystem.writeText(bundlePath.resolve("Contents/MacOS/$ENV_FILE"), envExports(env))
+        return ProcessBuilder("open", "-a", bundlePath.toAbsolutePath().toString(), "--wait-apps")
+            .inheritIO()
+            .start()
     }
 
     private fun infoPlist(
@@ -96,6 +103,8 @@ private class MacOSBundleSupport(
         return """
             |#!/bin/bash
             |DIR="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
+            |# launch 把额外环境变量写在这里，open 起不了子进程环境，只能中转。
+            |[ -f "${'$'}DIR/.krema-env" ] && . "${'$'}DIR/.krema-env"
             |export KREMA_MAIN_CLASS="${settings.mainClass}"
             |exec java --enable-native-access=ALL-UNNAMED -cp "${'$'}DIR/$resources/Java/*" "${settings.mainClass}" "${'$'}@"
             |
@@ -108,7 +117,6 @@ private class MacOSBundleSupport(
 /** Windows：jpackage `--type exe`。 */
 private class WindowsBundleSupport(
     private val fileSystem: FileSystem,
-    override val target: String,
     commandRunner: CommandRunner,
 ) : BundleSupport {
     private val jpackage = JpackageRunner(commandRunner, fileSystem)
@@ -127,13 +135,16 @@ private class WindowsBundleSupport(
             extraArgs = WINDOWS_INSTALLER_OPTIONS,
         )
 
+    /** `--dest` 落下的是安装器 `$appName-$version.exe`，文件名不固定，按后缀找。 */
     override fun launch(
         bundlePath: Path,
         env: Map<String, String>,
-    ): Process {
-        val launcher = bundlePath.resolve(bundlePath.fileName.toString() + ".exe")
-        return ProcessBuilder(launcher.toAbsolutePath().toString()).inheritIO().start()
-    }
+    ): Process =
+        ProcessBuilder(executableIn(bundlePath, ".exe").toAbsolutePath().toString())
+            .apply {
+                environment().putAll(env)
+                inheritIO()
+            }.start()
 
     private companion object {
         private val WINDOWS_INSTALLER_OPTIONS = listOf("--win-dir-chooser", "--win-shortcut", "--win-menu")
@@ -143,7 +154,6 @@ private class WindowsBundleSupport(
 /** Linux：jpackage `--type deb`。 */
 private class LinuxBundleSupport(
     private val fileSystem: FileSystem,
-    override val target: String,
     commandRunner: CommandRunner,
 ) : BundleSupport {
     private val jpackage = JpackageRunner(commandRunner, fileSystem)
@@ -162,20 +172,38 @@ private class LinuxBundleSupport(
             extraArgs = LINUX_INSTALLER_OPTIONS,
         )
 
+    /** `createProductionBundle` 产出的是一个 `.deb` 文件，启动要等装完；本轮不接 dev 启动。 */
     override fun launch(
         bundlePath: Path,
         env: Map<String, String>,
-    ): Process =
-        ProcessBuilder(
-            bundlePath
-                .resolve("bin")
-                .resolve(bundlePath.fileName.toString())
-                .toAbsolutePath()
-                .toString(),
-        ).inheritIO()
-            .start()
+    ): Nothing =
+        throw UnsupportedOperationException(
+            "Linux 产物是 .deb 安装包（$bundlePath），装上之后才谈得上启动 —— 没有可 exec 的 bundle 根目录",
+        )
 
     private companion object {
         private val LINUX_INSTALLER_OPTIONS = listOf("--linux-shortcut")
     }
 }
+
+/** 按后缀在目录里找启动器：jpackage 的产物名带版本号（`<name>-<version>.exe`），写死必错。 */
+private fun executableIn(
+    bundlePath: Path,
+    suffix: String,
+): Path =
+    Files.list(bundlePath).use { files ->
+        files
+            .filter { it.fileName.toString().endsWith(suffix) }
+            .findFirst()
+            .orElseThrow { UnsupportedOperationException("$bundlePath 里没有 $suffix 启动器") }
+    }
+
+/**
+ * 把额外环境变量写成 shell 的 `export` 语句。
+ *
+ * 给「启动器脚本 + 中转文件」那一路用（macOS），这些平台没有 `ProcessBuilder` 的环境注入。
+ */
+private fun envExports(env: Map<String, String>): String =
+    env.entries.joinToString("") { (key, value) -> "export $key='${value.replace("'", "'\\''")}'\n" }
+
+private const val ENV_FILE = ".krema-env"

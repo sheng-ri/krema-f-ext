@@ -57,7 +57,8 @@ class JdkResolver(
             ?.resolve("bin")
             ?.takeIf { Files.isExecutable(it.resolve(name)) }
             ?.let { return it }
-        return commandRunner.which("jpackage")?.parent
+        // 与上面的 `name` 一个口径：Windows 上 PATH 里躺的是 `jpackage.exe`。
+        return commandRunner.which(name)?.parent
     }
 
     private fun fromEnv(value: String?): Path? = value?.takeIf { it.isNotBlank() }?.let { Path.of(it) }?.takeIf(::hasJavaBinary)
