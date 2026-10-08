@@ -61,7 +61,7 @@ data class Window(
  */
 data class Build(
     val outDir: String = "dist",
-    val javaSourceDir: String = "src-java",
+    val javaSourceDir: String = "src",
     val mainClass: String? = null,
     val assetsPath: String = "assets",
 )

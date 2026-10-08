@@ -40,7 +40,7 @@ class KremaPluginTest {
     }
 
     @Test
-    fun declaresAllSevenTasksInKremaGroup(
+    fun declaresAllKremaTasksInGroup(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -131,7 +131,28 @@ class KremaPluginTest {
     }
 
     @Test
-    fun bundleRunsRealOrchestrationPath(
+    fun bundleProdRunsRealOrchestrationPath(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), typedBundleConfig(KremaTaskNames.BUNDLE_PROD, "APP_IMAGE"))
+        writeToml(projectDir)
+
+        val result = runGradle(projectDir, KremaTaskNames.BUNDLE_PROD)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome, result.output)
+        assertTrue(
+            projectDir
+                .toPath()
+                .resolve("build/krema")
+                .toFile()
+                .exists(),
+            "kremaBundleProd 没落产物目录",
+        )
+    }
+
+    @Test
+    fun bundleFailsLoudlyWithoutFormat(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -141,18 +162,25 @@ class KremaPluginTest {
         )
         writeToml(projectDir)
 
-        val result = runGradle(projectDir, KremaTaskNames.BUNDLE)
+        val result = runGradle(projectDir, KremaTaskNames.BUNDLE_PROD, expectFailure = true)
 
-        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE}")?.outcome, result.output)
         assertTrue(
-            projectDir
-                .toPath()
-                .resolve("build/krema")
-                .toFile()
-                .exists(),
-            "kremaBundle 没落产物目录",
+            result.output.contains("必须显式给 format"),
+            "不给 format 时应当硬报错且指向选哪个 format：\n${result.output}",
         )
     }
+
+    /** 类型化 `named` 配 format：无类型 lambda 里解析不到 task 的属性，且枚举拦在编译期。 */
+    private fun typedBundleConfig(
+        taskName: String,
+        format: String,
+    ) = """
+        plugins { id("top.birthcat.kremaf.ext") }
+
+        tasks.named<top.birthcat.kremaf.ext.gradle.task.KremaBundleTask>("$taskName") {
+            this.format.set(top.birthcat.kremaf.ext.spi.port.BundleFormat.$format)
+        }
+        """.trimIndent()
 
     private fun writeToml(projectDir: File) {
         Files.writeString(

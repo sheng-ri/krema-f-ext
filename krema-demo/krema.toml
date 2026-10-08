@@ -1,0 +1,11 @@
+[package]
+name = "krema-demo"
+identifier = "com.example.demo"
+version = "0.1.0"
+
+[build]
+main_class = "com.example.demo.Main"
+java_source_dir = "src-java"
+
+[bundle]
+identifier = "com.example.demo"

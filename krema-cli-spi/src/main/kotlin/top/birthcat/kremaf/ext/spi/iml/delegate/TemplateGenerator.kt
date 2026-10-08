@@ -30,7 +30,7 @@ class TemplateGenerator(
         settings: InitSettings,
     ): Path {
         val packagePath = settings.javaPackage.replace('.', '/')
-        fileSystem.writeText(dir.resolve("src-java/$packagePath/Main.java"), mainClass(settings))
+        fileSystem.writeText(dir.resolve("src/$packagePath/Main.java"), mainClass(settings))
         fileSystem.writeText(dir.resolve("krema.toml"), kremaToml(settings))
         fileSystem.writeText(dir.resolve(".gitignore"), GITIGNORE)
         return dir
@@ -68,7 +68,7 @@ class TemplateGenerator(
         |frontend_dev_command = "npm run dev"
         |frontend_dev_url = "http://localhost:5173"
         |out_dir = "dist"
-        |java_source_dir = "src-java"
+        |java_source_dir = "src"
         |main_class = "${settings.javaPackage}.Main"
         |assets_path = "assets"
         |
