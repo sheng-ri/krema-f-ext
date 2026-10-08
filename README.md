@@ -65,10 +65,3 @@ krema {
 | `kremaDev` | dev | 起前端 dev server 并编译，长驻，不进 CI 门禁 |
 | `kremaSignerGenerate` | signer generate | 生成一对签名密钥（Ed25519） |
 | `kremaSignerSign` | signer sign | 用私钥给产物签名 |
-
-```bash
-./gradlew kremaInit
-./gradlew kremaBuild
-./gradlew kremaBundle            # 默认按当前平台
-./gradlew kremaSignerGenerate
-```
