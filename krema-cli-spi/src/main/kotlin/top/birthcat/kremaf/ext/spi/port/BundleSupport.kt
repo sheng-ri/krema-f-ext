@@ -28,11 +28,16 @@ fun interface BundleSupportFactory {
  * dev bundle 给「原生特性需要正经 bundle 标识」的平台用（macOS 是唯一一个）。
  */
 interface BundleSupport {
-    /** 目标平台标识，与 [BundleSupportFactory.create] 的入参一致。 */
-    val target: String
-
     /** 该平台是否必须有 bundle 才能用原生特性。 */
     val requiresBundleForNativeFeatures: Boolean
+
+    /**
+     * 生产 bundle 是否还要调用方自己把 classpath 摊进去。
+     *
+     * macOS 手搓 `.app`，布局由本模块定，所以要 `true`；Windows / Linux 交 jpackage，
+     * runtime 镜像它自己装，调用方再摊一遍只会往安装包旁边倒垃圾。
+     */
+    val deploysClasspath: Boolean
 
     /**
      * 生成开发用 bundle，只够原生特性认出应用身份。
@@ -53,9 +58,10 @@ interface BundleSupport {
     /**
      * 通过 bundle 启动应用。
      *
-     * @param bundlePath bundle 根目录
+     * @param bundlePath [createProductionBundle] 的返回值
      * @param env 传给应用的额外环境变量
      * @return 应用进程句柄
+     * @throws UnsupportedOperationException 该平台的产物是安装包，装完才谈得上启动
      */
     fun launch(
         bundlePath: Path,

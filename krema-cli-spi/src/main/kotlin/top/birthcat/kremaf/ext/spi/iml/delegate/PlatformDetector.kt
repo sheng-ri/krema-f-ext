@@ -20,6 +20,13 @@ object PlatformDetector {
     /** 探测当前架构标识，如 `aarch64`、`x86_64`。 */
     fun getArch(): String = normalizeArch(System.getProperty("os.arch"))
 
+    /**
+     * 当前平台的标识，形如 `linux-x86_64`。
+     *
+     * 与上游 `Platform.getTarget()` 同形：只作平台身份标识给下游用，不是可配置的目标平台。
+     */
+    fun currentTarget(): String = "${detect().name.lowercase(Locale.ROOT)}-${getArch()}"
+
     /** 归一化架构别名。 */
     fun normalizeArch(arch: String): String =
         when (arch.lowercase(Locale.ROOT)) {

@@ -61,7 +61,25 @@ krema {
 | `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`） |
 | `kremaBuild` | build | 跑前端生产构建，再编译 `src-java` |
 | `kremaBuildNative` | build --native | 常规编译之后打 native-image |
-| `kremaBundle` | bundle | 按平台生成可分发包，再把 classpath 与原生库放进去 |
+| `kremaBundle` | bundle | 按平台生成可分发包（见下） |
 | `kremaDev` | dev | 起前端 dev server 并编译，长驻，不进 CI 门禁 |
 | `kremaSignerGenerate` | signer generate | 生成一对签名密钥（Ed25519） |
 | `kremaSignerSign` | signer sign | 用私钥给产物签名 |
+
+### 打包
+
+`kremaBundle` 打的就是当前平台，产物落 `build/krema/<平台>/`：
+
+| 平台 | 怎么打 | 产出 |
+|---|---|---|
+| Linux | 真调 `jpackage --type deb` | `.deb` |
+| Windows | 真调 `jpackage --type exe` | 安装包目录（含 `.exe`） |
+| macOS | 手搓 `.app` | `.app` |
+
+macOS 不走 jpackage：手搓 `.app` 是 `kremaDev` 的硬依赖
+（`requiresBundleForNativeFeatures`），交给 jpackage 重做会把 dev 流程带崩。
+
+平台跟随 `kremaBundle` 所在的机器，没有「配置目标平台」这一说：
+`.exe` 只能在 Windows 打，`.deb` 只能在 Linux 打，都不做交叉打包。
+
+jpackage 路径需要 JDK 自带的 `jpackage`；Linux 上打 `.deb` 另需 `fakeroot` 与 `binutils`。

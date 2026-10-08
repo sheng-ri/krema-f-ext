@@ -40,6 +40,27 @@ class JdkResolver(
         return fromCurrentJvm()
     }
 
+    /**
+     * 找 `jpackage`。
+     *
+     * 先认 [resolve] 给的 JDK 25，再退到 PATH：CI 镜像里 `jpackage` 与 `java` 同源，
+     * 但容器可能只把 `jpackage` 挂进 PATH。
+     *
+     * @return `jpackage` 所在目录，找不到时返回 null
+     */
+    fun resolveJpackage(
+        env: Map<String, String> = System.getenv(),
+        userHome: Path = Path.of(System.getProperty("user.home")),
+    ): Path? {
+        val name = if (isWindows()) "jpackage.exe" else "jpackage"
+        resolve(env, userHome)
+            ?.resolve("bin")
+            ?.takeIf { Files.isExecutable(it.resolve(name)) }
+            ?.let { return it }
+        // 与上面的 `name` 一个口径：Windows 上 PATH 里躺的是 `jpackage.exe`。
+        return commandRunner.which(name)?.parent
+    }
+
     private fun fromEnv(value: String?): Path? = value?.takeIf { it.isNotBlank() }?.let { Path.of(it) }?.takeIf(::hasJavaBinary)
 
     private fun fromJavaHomeEnv(value: String?): Path? =

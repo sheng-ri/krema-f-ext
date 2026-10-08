@@ -5,6 +5,7 @@
 package top.birthcat.kremaf.ext.gradle
 
 import org.gradle.api.Project
+import org.gradle.api.tasks.SourceSetContainer
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildNativeTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
@@ -12,7 +13,6 @@ import top.birthcat.kremaf.ext.gradle.task.KremaDevTask
 import top.birthcat.kremaf.ext.gradle.task.KremaInitTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerGenerateTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerSignTask
-import top.birthcat.kremaf.ext.spi.iml.delegate.PlatformDetector
 
 /** `krema` 分组下 7 张 task 的名字，TestKit 与 README 都从这里取。 */
 object KremaTaskNames {
@@ -54,9 +54,8 @@ internal fun Project.registerKremaTasks() {
 
     tasks.register(KremaTaskNames.BUNDLE, KremaBundleTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "生成可分发的平台安装包"
+        task.description = "为当前平台生成可分发的安装包"
         task.configureProject(ext, frontend)
-        task.target.convention(currentTarget())
     }
 
     tasks.register(KremaTaskNames.DEV, KremaDevTask::class.java) { task ->
@@ -93,16 +92,18 @@ internal fun KremaProjectTask.configureProject(
         ext.configFile.orElse(project.layout.projectDirectory.file("krema.toml")).map { it.asFile.absolutePath },
     )
     outputDir.convention(ext.outputDir.orElse(project.layout.buildDirectory.dir("krema")))
-    classOutputDir.convention(project.layout.buildDirectory.dir("classes/kotlin/main"))
+    // 应用自己的输出不属于自己的 runtimeClasspath，得单独接上。
+    // java 插件在就取 main source set 的输出；不在（裸 Kotlin）就退到 Kotlin 约定目录。
+    if (project.plugins.hasPlugin("java")) {
+        val main = project.extensions.getByType(SourceSetContainer::class.java).getByName("main")
+        classOutputDir.convention(main.java.destinationDirectory)
+        runtimeClasspath.from(main.output)
+    } else {
+        classOutputDir.convention(project.layout.buildDirectory.dir("classes/kotlin/main"))
+    }
     project.configurations.findByName("runtimeClasspath")?.let(runtimeClasspath::from)
     frontendBuildCommand.convention(frontend.buildCommand)
     frontendDevCommand.convention(frontend.devCommand)
     frontendDevUrl.convention(frontend.devUrl)
     mainClass.convention(ext.mainClass)
-}
-
-private fun currentTarget(): String {
-    val platform = PlatformDetector.detect().name.lowercase()
-    val arch = PlatformDetector.getArch()
-    return "$platform-$arch"
 }
