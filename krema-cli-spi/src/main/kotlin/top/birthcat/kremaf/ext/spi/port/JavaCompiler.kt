@@ -14,7 +14,7 @@ import java.nio.file.Path
  */
 interface JavaCompiler {
     /**
-     * 编译 `src-java` 下的源码。
+     * 编译 `src` 下的源码。
      *
      * @param project 项目输入，源码目录取自 [KremaProject.java]
      * @param classpath 依赖 classpath，不含本项目输出目录

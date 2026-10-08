@@ -59,7 +59,7 @@ krema {
 | task | 对应上游 CLI | 做什么 |
 |---|---|---|
 | `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`） |
-| `kremaBuild` | build | 跑前端生产构建，再编译 `src-java` |
+| `kremaBuild` | build | 跑前端生产构建，再编译 `src` |
 | `kremaBuildNative` | build --native | 常规编译之后打 native-image |
 | `kremaBundleDev` | bundle | 生成开发用 bundle（只够原生特性认出应用身份） |
 | `kremaBundleProd` | bundle | 生成可分发的生产 bundle，再把 classpath 与原生库放进去 |
