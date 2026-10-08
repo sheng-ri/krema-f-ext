@@ -68,25 +68,18 @@ krema {
 
 ### 打包
 
-`kremaBundle` 按 `target` 分派，产物落 `build/krema/<平台>/`：
+`kremaBundle` 打的就是当前平台，产物落 `build/krema/<平台>/`：
 
 | 平台 | 怎么打 | 产出 |
 |---|---|---|
-| `linux-*` | 真调 `jpackage --type deb` | `.deb` |
-| `windows-*` | 真调 `jpackage --type exe` | 安装包目录（含 `.exe`） |
-| `darwin-*` | 手搓 `.app` + ad-hoc codesign | `.app` |
+| Linux | 真调 `jpackage --type deb` | `.deb` |
+| Windows | 真调 `jpackage --type exe` | 安装包目录（含 `.exe`） |
+| macOS | 手搓 `.app` | `.app` |
 
 macOS 不走 jpackage：手搓 `.app` 是 `kremaDev` 的硬依赖
 （`requiresBundleForNativeFeatures`），交给 jpackage 重做会把 dev 流程带崩。
 
-`target` 默认取当前平台，可覆盖：
-
-```kotlin
-tasks.named<top.birthcat.kremaf.ext.gradle.task.KremaBundleTask>("kremaBundle") {
-    target.set("linux-x86_64")
-}
-```
+平台跟随 `kremaBundle` 所在的机器，没有「配置目标平台」这一说：
+`.exe` 只能在 Windows 打，`.deb` 只能在 Linux 打，都不做交叉打包。
 
 jpackage 路径需要 JDK 自带的 `jpackage`；Linux 上打 `.deb` 另需 `fakeroot` 与 `binutils`。
-
-**不做交叉打包**：`.exe` 只能在 Windows 打，`.deb` 只能在 Linux 打。

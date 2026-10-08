@@ -13,7 +13,6 @@ import top.birthcat.kremaf.ext.gradle.task.KremaDevTask
 import top.birthcat.kremaf.ext.gradle.task.KremaInitTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerGenerateTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerSignTask
-import top.birthcat.kremaf.ext.spi.iml.delegate.PlatformDetector
 
 /** `krema` 分组下 7 张 task 的名字，TestKit 与 README 都从这里取。 */
 object KremaTaskNames {
@@ -55,9 +54,8 @@ internal fun Project.registerKremaTasks() {
 
     tasks.register(KremaTaskNames.BUNDLE, KremaBundleTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "生成可分发的平台安装包"
+        task.description = "为当前平台生成可分发的安装包"
         task.configureProject(ext, frontend)
-        task.target.convention(currentTarget())
     }
 
     tasks.register(KremaTaskNames.DEV, KremaDevTask::class.java) { task ->
@@ -108,10 +106,4 @@ internal fun KremaProjectTask.configureProject(
     frontendDevCommand.convention(frontend.devCommand)
     frontendDevUrl.convention(frontend.devUrl)
     mainClass.convention(ext.mainClass)
-}
-
-private fun currentTarget(): String {
-    val platform = PlatformDetector.detect().name.lowercase()
-    val arch = PlatformDetector.getArch()
-    return "$platform-$arch"
 }

@@ -136,14 +136,15 @@ class KremaPluginTest {
     ) {
         writeSettings(projectDir)
         // 钉 darwin：手搓 `.app`，不碰 jpackage —— 门禁机器上不一定有 jpackage 工具链，
-        // 真 `.deb` 验收在 web_trigger 手动入口（见 #27）。
+        // 真 `.deb` 验收在 PR 门禁的 `.deb` stage（见 #27）。
+        // `platform` 是 `@Internal` 的测试注入口，不是对外配置面。
         Files.writeString(
             projectDir.toPath().resolve("build.gradle.kts"),
             """
             plugins { id("top.birthcat.kremaf.ext") }
 
             tasks.named<top.birthcat.kremaf.ext.gradle.task.KremaBundleTask>("kremaBundle") {
-                target.set("darwin-aarch64")
+                platform.set("darwin")
             }
             """.trimIndent(),
         )

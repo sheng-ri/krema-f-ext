@@ -34,8 +34,6 @@ rootProject.name = "deb-smoke"
 EOF
 
 cat > "$workdir/build.gradle.kts" <<EOF
-import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
-
 plugins {
     java
     id("top.birthcat.kremaf.ext") version "${version}"
@@ -48,10 +46,6 @@ krema {
 // Krema 约定的 Java 源码目录是 krema.toml 的 src-java，接到标准 source set 上。
 sourceSets.main {
     java.setSrcDirs(listOf("src-java"))
-}
-
-tasks.named<KremaBundleTask>("kremaBundle") {
-    target.set("linux-x86_64")
 }
 EOF
 
