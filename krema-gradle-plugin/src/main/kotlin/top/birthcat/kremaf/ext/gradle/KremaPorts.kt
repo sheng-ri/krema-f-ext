@@ -43,7 +43,7 @@ class KremaPorts(
 
     fun frontend(): FrontendBuilder = NioFrontendBuilder(commandRunner)
 
-    fun javaCompiler(outputDir: Path): JavaCompiler = NioJavaCompiler(commandRunner, JdkResolver(commandRunner), outputDir)
+    fun javaCompiler(outputDir: Path): JavaCompiler = NioJavaCompiler(commandRunner, JdkResolver(commandRunner), outputDir, fileSystem)
 
     fun deployer(): AppDeployer = NioAppDeployer(fileSystem)
 

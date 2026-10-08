@@ -48,7 +48,7 @@ internal fun Project.registerKremaTasks() {
 
     tasks.register(KremaTaskNames.BUILD_NATIVE, KremaBuildNativeTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "在 kremaBuild 之上打 native-image（工具链见 #26）"
+        task.description = "在 kremaBuild 之上打 native-image"
         task.configureProject(ext, frontend)
     }
 
