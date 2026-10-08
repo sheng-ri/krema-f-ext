@@ -17,9 +17,11 @@ import top.birthcat.kremaf.ext.spi.iml.nativeimpl.ArgFiles
 import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NativeImageBuilder
 import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NioFileSystem
 import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NioJavaCompiler
+import top.birthcat.kremaf.ext.spi.port.Build
 import top.birthcat.kremaf.ext.spi.port.Classpath
 import top.birthcat.kremaf.ext.spi.port.CommandRunner
 import top.birthcat.kremaf.ext.spi.port.JavaProject
+import top.birthcat.kremaf.ext.spi.port.KremaConfig
 import top.birthcat.kremaf.ext.spi.port.KremaProject
 import java.io.File
 import java.nio.file.Files
@@ -145,6 +147,37 @@ class JavaCompilerNativeTest {
         )
     }
 
+    /**
+     * 资源清单必须是合法 JSON。
+     *
+     * `assetsPath` 是用户填的，Windows 路径天然带 `\`；直接 `String.format` 拼进去会产出非法 JSON，
+     * 而 native-image 只会报「读不了这份清单」，离现场很远。这里拿一个既有 `\` 又有 `"` 的路径，
+     * 断言文件内容逐字对齐转义后的形态。
+     */
+    @Test
+    fun escapesAssetsPathInTheResourceConfig(
+        @TempDir root: File,
+    ) {
+        val dir = root.toPath()
+        val assets = "C:\\krema \"app\"/assets"
+        val project = KremaProject(dir, config = KremaConfig(build = Build(assetsPath = assets)))
+
+        val text = fs.readText(NativeImageBuilder(RecordingRunner(), fs).writeResourceConfig(project, dir)).orEmpty()
+
+        assertEquals(
+            """
+            {
+              "resources": {
+                "includes": [
+                  { "pattern": "C:\\krema \"app\"/assets/.*" }
+                ]
+              }
+            }
+            """.trimIndent(),
+            text,
+        )
+    }
+
     @Test
     fun compilesSourcesBeforeNativeImage(
         @TempDir root: File,
@@ -200,6 +233,20 @@ class JavaCompilerNativeTest {
         val binary = compiler(runner, dir, graalHome).compileNative(project, Classpath(emptyList(), dir.resolve("out/classes"), libDir))
 
         assertEquals("so", fs.readText(binary.parent.resolve(name)))
+    }
+
+    /** 交付的二进制自己得带可执行位，别指望工具链在每个平台上都照旧。 */
+    @Test
+    fun marksTheNativeBinaryExecutable(
+        @TempDir root: File,
+    ) {
+        val dir = root.toPath()
+        val graalHome = fakeToolDir(dir.resolve("graalvm"))
+        val project = KremaProject(dir, java = JavaProject(mainClass = "com.example.Main"))
+
+        val binary = compiler(RecordingRunner(), dir, graalHome).compileNative(project, Classpath(emptyList(), dir.resolve("out/classes")))
+
+        assertTrue(Files.isExecutable(binary), "产物没有可执行位：$binary")
     }
 
     /**
@@ -333,6 +380,8 @@ class JavaCompilerNativeTest {
             env: Map<String, String>,
         ): Int {
             commands.add(command)
+            // native-image 会写 `-o` 指定的产物，假 runner 照做，收尾动作才有东西可碰。
+            command.indexOf("-o").takeIf { it >= 0 }?.let { Files.writeString(Path.of(command[it + 1]), "bin") }
             return 0
         }
 

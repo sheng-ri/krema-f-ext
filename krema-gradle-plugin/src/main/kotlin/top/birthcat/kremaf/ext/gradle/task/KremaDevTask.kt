@@ -20,8 +20,7 @@ abstract class KremaDevTask : KremaProjectTask() {
     fun dev() {
         val project = kremaProject()
         val ports = ports()
-        val env = ports.env(project)
-        ports.frontend().startDevServer(project, env)
+        ports.frontend().startDevServer(project)
         ports.javaCompiler(outputDir.get().asFile.toPath()).compile(project, ports.classpath(project))
     }
 }

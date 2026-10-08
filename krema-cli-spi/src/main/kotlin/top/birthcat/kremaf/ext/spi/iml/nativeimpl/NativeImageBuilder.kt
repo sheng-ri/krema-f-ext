@@ -110,25 +110,42 @@ class NativeImageBuilder(
         return commandRunner.which(NATIVE_IMAGE)
     }
 
-    /** 前端资源清单：native-image 默认只打进 classpath 里的资源，assets 在输出目录，得显式声明。 */
+    /**
+     * 前端资源清单：native-image 默认只打进 classpath 里的资源，assets 在输出目录，得显式声明。
+     *
+     * `assetsPath` 是用户填的（`krema.toml`），Windows 路径里带 `\` 或目录名里带 `"` 都正常，
+     * 所以拼进 JSON 前先转义 —— 用 `String.format` 硬拼会让清单变成非法 JSON，
+     * 而 native-image 报的错会离现场很远（它只会说读不了这份清单）。
+     */
     fun writeResourceConfig(
         project: KremaProject,
         workDir: Path,
     ): Path {
-        val assetsPath = project.config.build.assetsPath
+        val pattern = jsonString(project.config.build.assetsPath + "/.*")
         val config =
             """
             {
               "resources": {
                 "includes": [
-                  { "pattern": "%s/.*" }
+                  { "pattern": $pattern }
                 ]
               }
             }
             """.trimIndent()
         val file = workDir.resolve("krema-resource-config.json")
-        fileSystem.writeText(file, config.format(assetsPath))
+        fileSystem.writeText(file, config)
         return file
+    }
+
+    /** 按 JSON 字符串字面量转义：只处理 `\`、`"` 与控制字符，够路径用。 */
+    private fun jsonString(value: String): String {
+        val escaped =
+            value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .map { if (it < ' ') "\\u%04x".format(it.code) else it.toString() }
+                .joinToString("")
+        return "\"$escaped\""
     }
 
     /**

@@ -77,6 +77,9 @@ class NioJavaCompiler(
 
         nativeImageBuilder.copyNativeLibrary(classpath, outputBinary)
         nativeImageBuilder.copyVCRuntime(outputBinary.parent)
+        // native-image 的产物一般自带可执行位，这里显式补一次：交付出去的必须是能直接双击的东西，
+        // 不指望工具链在别的平台上是否照旧。
+        fileSystem.markExecutable(outputBinary)
         return outputBinary
     }
 

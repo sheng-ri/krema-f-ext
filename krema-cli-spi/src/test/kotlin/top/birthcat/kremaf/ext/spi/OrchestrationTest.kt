@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import top.birthcat.kremaf.ext.spi.iml.delegate.DotEnvLoader
 import top.birthcat.kremaf.ext.spi.iml.delegate.KremaConfigLoader
 import top.birthcat.kremaf.ext.spi.iml.delegate.NativeLibraryFinder
 import top.birthcat.kremaf.ext.spi.iml.delegate.Platform
@@ -90,7 +89,7 @@ class OrchestrationTest {
     }
 
     @Test
-    fun loadsConfigAndEnvFromDisk(
+    fun loadsConfigFromDisk(
         @TempDir root: File,
     ) {
         val dir = root.toPath()
@@ -102,8 +101,6 @@ class OrchestrationTest {
             version = "1.2.3"
             """.trimIndent(),
         )
-        fs.writeText(dir.resolve(".env"), "API_URL=http://a\n# comment\n")
-        fs.writeText(dir.resolve(".env.dev"), "API_URL=http://b\n")
 
         val config = KremaConfigLoader().loadOrDefault(dir.resolve("krema.toml"))
         assertEquals("demo", config.packageName)
@@ -111,8 +108,5 @@ class OrchestrationTest {
 
         // 前端命令归 Frontend；[build] 只留 out_dir / java_source_dir / main_class / assets_path。
         assertEquals("dist", config.build.outDir)
-
-        val env = DotEnvLoader(fs).load(dir, "dev")
-        assertEquals("http://b", env["API_URL"])
     }
 }

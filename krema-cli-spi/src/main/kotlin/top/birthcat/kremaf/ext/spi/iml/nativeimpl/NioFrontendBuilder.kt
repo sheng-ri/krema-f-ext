@@ -21,24 +21,18 @@ import java.nio.file.Path
 class NioFrontendBuilder(
     private val commandRunner: CommandRunner,
 ) : FrontendBuilder {
-    override fun build(
-        project: KremaProject,
-        env: Map<String, String>,
-    ): Path {
+    override fun build(project: KremaProject): Path {
         val frontend = project.frontend
         val workingDir = frontend.workingDir ?: project.dir
-        val exit = commandRunner.exec(split(frontend.buildCommand), workingDir, env)
+        val exit = commandRunner.exec(split(frontend.buildCommand), workingDir)
         check(exit == 0) { "前端构建失败，退出码 $exit" }
         return workingDir.resolve(project.config.build.outDir)
     }
 
-    override fun startDevServer(
-        project: KremaProject,
-        env: Map<String, String>,
-    ): Process {
+    override fun startDevServer(project: KremaProject): Process {
         val frontend = project.frontend
         val workingDir = frontend.workingDir ?: project.dir
-        return commandRunner.spawn(split(frontend.devCommand), workingDir, env)
+        return commandRunner.spawn(split(frontend.devCommand), workingDir)
     }
 
     override fun isDevServerUp(url: String): Boolean {
