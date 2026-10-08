@@ -11,5 +11,6 @@ import org.gradle.api.Project
 class KremaPlugin : Plugin<Project> {
     override fun apply(project: Project) {
         project.extensions.create("krema", KremaExtension::class.java)
+        project.registerKremaTasks()
     }
 }

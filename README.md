@@ -41,25 +41,50 @@ plugins {
 }
 
 krema {
-    // 配置项随各 task 落地补齐
+    // krema.toml 位置，默认项目根下 krema.toml
+    configFile.set(layout.projectDirectory.file("krema.toml"))
+
+    // 产物根目录，默认 build/krema
+    outputDir.set(layout.buildDirectory.dir("krema"))
+
+    // [build] 一道缝：这里填的值覆盖 krema.toml 的同名项，不填则以 toml 为准
+    frontendCommand.set("npm run build")
+    frontendDevCommand.set("npm run dev")
+    frontendDevUrl.set("http://localhost:5173")
+    mainClass.set("com.example.app.Main")
 }
 ```
 
+`krema.toml` 管 Krema 语义（`[window]`/`[permissions]`/`[package]` 等），`krema { }` 只管构建语义。
+判据是「谁比 toml 更懂」：上面六项 Gradle 更懂，其余 section 归 toml。
+
+**除 `kremaInit` 外，所有 task 都要求 `krema.toml` 已存在**，缺失即硬报错。
+
 ### task
 
-以下 task 归属 `krema` 分组，选项通过 Gradle `Property` 暴露（名字随落地补齐）：
+以下 task 归属 `krema` 分组：
 
-| task | 对应上游 CLI |
-|---|---|
-| `kremaInit` | init |
-| `kremaBuild` | build |
-| `kremaBuildNative` | build --native |
-| `kremaBundle` | bundle |
-| `kremaDev` | dev |
-| `kremaSignerGenerate` | signer generate |
-| `kremaSignerSign` | signer sign |
+| task | 对应上游 CLI | 做什么 |
+|---|---|---|
+| `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`）。唯一不要求 toml 先存在的 task |
+| `kremaBuild` | build | 跑前端生产构建，再编译 `src-java` |
+| `kremaBuildNative` | build --native | 常规编译之后打 native-image；工具链接通见 [#26](https://cnb.cool/BirthCat-Dev/krema-f-ext/-/issues/26) |
+| `kremaBundle` | bundle | 按平台生成可分发包，再把 classpath 与原生库放进去 |
+| `kremaDev` | dev | 起前端 dev server 并编译，长驻，不进 CI 门禁 |
+| `kremaSignerGenerate` | signer generate | 生成一对签名密钥（Ed25519） |
+| `kremaSignerSign` | signer sign | 用私钥给产物签名 |
 
-> 骨架阶段这些 task 尚未实现，用法随对应工单补齐。
+```bash
+./gradlew kremaInit
+./gradlew kremaBuild
+./gradlew kremaBundle            # 默认按当前平台
+./gradlew kremaSignerGenerate
+```
+
+`kremaBundle` 的 `target`、`kremaSignerSign` 的 `artifact` / `privateKey` / `signature`
+都声明为 Gradle `Property`，在 `build.gradle.kts` 里赋值，不走 `-P` 命令行。
+
+task 的输入输出全为 `Property`，不注入 `Project`，Configuration Cache 干净。
 
 ## 依赖
 
