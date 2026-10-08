@@ -12,7 +12,7 @@ Krema 是一套 Java + 系统 WebView 的桌面框架，上游自带一个 `krem
 | `krema-gradle-plugin` | Gradle 插件薄壳：声明 task、绑定输入输出、实现 Gradle 差异 |
 | `krema-cli-spi` | 中间层：Kotlin 编排契约与实现，不认识 Gradle 也不认识 Maven |
 
-分层的意义：编排逻辑在不起 Gradle 的情况下就能单测。
+分层是为了职责清楚：插件管 Gradle 差异，中间层管编排，两边不互相认。
 
 ## 构建
 
