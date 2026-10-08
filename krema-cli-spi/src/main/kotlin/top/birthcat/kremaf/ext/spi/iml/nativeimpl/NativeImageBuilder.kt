@@ -24,6 +24,10 @@ import java.nio.file.Path
  *
  * 工具查找顺序固定为 `GRAALVM_HOME` → 解析出的 JDK → `PATH`，三级都由 [CommandRunner] 落子进程，
  * 测试里换掉 runner 就能在没有 GraalVM 的机器上断言完整命令行。
+ *
+ * classpath 不拼进命令行：写进 [ArgFiles] 的参数文件，命令行只递 `@<文件>`。
+ * Windows 的 `CreateProcess` 上限约 32767 字符，而 classpath 拉长到 32K 是常态 ——
+ * 真吐出去只会换回一个看不懂的失败，所以在拼装这一层就掐掉。
  */
 class NativeImageBuilder(
     private val commandRunner: CommandRunner,
@@ -38,12 +42,17 @@ class NativeImageBuilder(
         outputBinary: Path,
         resourceConfig: Path?,
         tool: Path,
+        classpathArgFile: Path? = null,
     ): List<String> {
         val mainClass = project.java.mainClass ?: error("krema.toml 的 [build].main_class 必须配，native 构建没有默认主类兜底")
         return buildList {
             add(tool.toString())
-            add("-cp")
-            add(libraryPath(classpath, classesDir))
+            if (classpathArgFile == null) {
+                add("-cp")
+                add(libraryPath(classpath, classesDir))
+            } else {
+                add("@$classpathArgFile")
+            }
             add("--enable-native-access=ALL-UNNAMED")
             add("-H:+UnlockExperimentalVMOptions")
             add("-H:-CheckToolchain")
@@ -58,6 +67,24 @@ class NativeImageBuilder(
             add(outputBinary.toString())
             add(mainClass)
         }
+    }
+
+    /**
+     * 把 classpath 写进参数文件，返回 `@` 引用的那个文件。
+     *
+     * 只有超长才值得走文件 —— 门限之内命令行更直观，出问题时肉眼就能看出参数拼错没有。
+     * 超长时命令行里那两段（`-cp` 与值）换成 `@<文件>`，省下的正是 classpath 那一大坨。
+     */
+    fun classpathArgFile(
+        classpath: Classpath,
+        classesDir: Path,
+        workDir: Path,
+    ): Path? {
+        val path = libraryPath(classpath, classesDir)
+        if (path.length <= COMMAND_LINE_LIMIT_CHARS) return null
+        val file = workDir.resolve(CLASSPATH_ARG_FILE)
+        fileSystem.writeText(file, ArgFiles.render(listOf("-cp", path)))
+        return file
     }
 
     /**
@@ -104,15 +131,27 @@ class NativeImageBuilder(
         return file
     }
 
-    /** 把原生库拷到可执行文件旁边，运行时才找得到。 */
+    /**
+     * 把原生库拷到可执行文件旁边，运行时才找得到。
+     *
+     * 一个目录里可能有多个 `.so`，所以按候选顺序全部拷过去，而不是捞到第一个就收工。
+     * 先命中的目录先拷，同名文件按 Java 的绑定语义「先到先得」，后面的不再覆盖。
+     *
+     * @return 实际拷过去的库文件
+     */
     fun copyNativeLibrary(
         classpath: Classpath,
         outputBinary: Path,
-    ): Path? {
+    ): List<Path> {
         val candidates = classpath.entries.mapNotNull { it.parent } + listOfNotNull(classpath.nativeLibDir)
-        val library = nativeLibraryFinder.findLibrary(candidates) ?: return null
-        fileSystem.copyFlat(library, outputBinary.parent)
-        return library
+        val copied = mutableListOf<Path>()
+        val taken = mutableSetOf<String>()
+        for (candidate in nativeLibraryFinder.findLibraries(candidates)) {
+            if (!taken.add(candidate.fileName.toString())) continue
+            fileSystem.copyFlat(candidate, outputBinary.parent)
+            copied.add(candidate)
+        }
+        return copied
     }
 
     /**
@@ -168,6 +207,10 @@ class NativeImageBuilder(
 
     private companion object {
         private const val NATIVE_IMAGE = "native-image"
+        private const val CLASSPATH_ARG_FILE = "krema-classpath" + ArgFiles.SUFFIX
+
+        /** `CreateProcess` 的命令行上限是 32767 个 UTF-16 单元，留一点余量给别的参数。 */
+        private const val COMMAND_LINE_LIMIT_CHARS = 30_000
         private val VC_RUNTIME_DLLS = listOf("vcruntime140.dll", "vcruntime140_1.dll")
     }
 }

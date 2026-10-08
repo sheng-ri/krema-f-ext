@@ -5,6 +5,7 @@
 package top.birthcat.kremaf.ext.spi
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir
 import top.birthcat.kremaf.ext.spi.iml.delegate.JdkResolver
 import top.birthcat.kremaf.ext.spi.iml.delegate.PlatformDetector
 import top.birthcat.kremaf.ext.spi.iml.delegate.executableSuffix
+import top.birthcat.kremaf.ext.spi.iml.nativeimpl.ArgFiles
 import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NativeImageBuilder
 import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NioFileSystem
 import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NioJavaCompiler
@@ -20,6 +22,7 @@ import top.birthcat.kremaf.ext.spi.port.CommandRunner
 import top.birthcat.kremaf.ext.spi.port.JavaProject
 import top.birthcat.kremaf.ext.spi.port.KremaProject
 import java.io.File
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -45,13 +48,7 @@ class JavaCompilerNativeTest {
         compiler(runner, dir, graalHome).compileNative(project, Classpath(listOf(jar), bogusOutput, libDir))
 
         val native = runner.commands.single { it.first().endsWith("native-image") }
-        val classesDir = dir.resolve("out/classes")
         assertEquals(toolIn(graalHome).toString(), native.first())
-        assertEquals("-cp", native[1])
-        assertEquals(
-            listOf(classesDir.toString(), bogusOutput.toString(), jar.toString()),
-            native[2].split(File.pathSeparator),
-        )
         assertTrue(native.contains("--enable-native-access=ALL-UNNAMED"))
         assertTrue(native.contains("-H:+UnlockExperimentalVMOptions"))
         assertTrue(native.contains("-H:-CheckToolchain"))
@@ -61,6 +58,91 @@ class JavaCompilerNativeTest {
         assertEquals("-o", native[native.size - 3])
         assertEquals(project.bundle.appName, Path.of(native[native.size - 2]).fileName.toString())
         assertEquals("com.example.Main", native.last())
+    }
+
+    @Test
+    fun keepsShortClasspathOnTheCommandLine(
+        @TempDir root: File,
+    ) {
+        val dir = root.toPath()
+        val graalHome = fakeToolDir(dir.resolve("graalvm"))
+        val runner = RecordingRunner()
+        val bogusOutput = dir.resolve("gradle-class-output")
+        val jar = dir.resolve("app.jar").also { fs.writeText(it, "jar") }
+        val project = KremaProject(dir, java = JavaProject(mainClass = "com.example.Main"))
+
+        compiler(runner, dir, graalHome).compileNative(project, Classpath(listOf(jar), bogusOutput))
+
+        val native = runner.commands.single { it.first().endsWith("native-image") }
+        assertFalse(native.any { it.startsWith("@") }, native.toString())
+        assertEquals("-cp", native[1])
+        assertEquals(
+            listOf(dir.resolve("out/classes").toString(), bogusOutput.toString(), jar.toString()),
+            native[2].split(File.pathSeparator),
+        )
+    }
+
+    /**
+     * classpath 一长就换成参数文件。
+     *
+     * 门限按 `CreateProcess` 的 32767 字符定。这里不靠超长文件名（路径总长本身有上限），
+     * 而是堆足够多的条目把拼出来的 classpath 撑过门限。
+     */
+    @Test
+    fun passesLongClasspathThroughAnArgFile(
+        @TempDir root: File,
+    ) {
+        val dir = root.toPath()
+        val graalHome = fakeToolDir(dir.resolve("graalvm"))
+        val runner = RecordingRunner()
+        val entries = List(1_200) { index -> dir.resolve("deps/dep-$index.jar").also { fs.writeText(it, "jar") } }
+        val bogusOutput = dir.resolve("gradle-class-output")
+        val project = KremaProject(dir, java = JavaProject(mainClass = "com.example.Main"))
+        val classpath = Classpath(entries, bogusOutput)
+
+        compiler(runner, dir, graalHome).compileNative(project, classpath)
+
+        val native = runner.commands.single { it.first().endsWith("native-image") }
+        assertFalse(native.contains("-cp"), "classpath 超长时命令行里不该再有 -cp")
+        assertTrue(native[1].startsWith("@"), native.toString())
+        val argFile = Path.of(native[1].removePrefix("@"))
+        assertEquals(dir.resolve("out/krema-classpath${ArgFiles.SUFFIX}"), argFile)
+        assertEquals(
+            listOf("-cp", (listOf(dir.resolve("out/classes"), bogusOutput) + entries).joinToString(File.pathSeparator)),
+            readArguments(argFile),
+        )
+        assertEquals("com.example.Main", native.last())
+    }
+
+    /**
+     * 参数文件里含空白或引号的路径要有引号兜住。
+     *
+     * `JLI_Launch` 是空白分隔 token 的，不加引号的话 `C:/Program Files/...` 会被劈成两个参数，
+     * 报出来的错会是「找不到主类 x86」这种与病因无关的东西。
+     */
+    @Test
+    fun quotesPathsWithSpacesInTheArgFile(
+        @TempDir root: File,
+    ) {
+        val dir = root.toPath()
+        val graalHome = fakeToolDir(dir.resolve("graalvm"))
+        val runner = RecordingRunner()
+        val entries = List(1_200) { index -> dir.resolve("with space-$index/dep-$index.jar").also { fs.writeText(it, "jar") } }
+        val project = KremaProject(dir, java = JavaProject(mainClass = "com.example.Main"))
+
+        compiler(runner, dir, graalHome).compileNative(project, Classpath(entries, dir.resolve("out/classes")))
+
+        val native = runner.commands.single { it.first().endsWith("native-image") }
+        assertTrue(native[1].startsWith("@"), native.take(3).toString())
+        val argFile = Path.of(native[1].removePrefix("@"))
+        val arguments = readArguments(argFile)
+
+        assertEquals("-cp", arguments.first())
+        assertEquals(
+            (listOf(dir.resolve("out/classes")) + entries).joinToString(File.pathSeparator),
+            arguments[1],
+            "含空白的 classpath 在参数文件里要作为一个整体",
+        )
     }
 
     @Test
@@ -120,7 +202,86 @@ class JavaCompilerNativeTest {
         assertEquals("so", fs.readText(binary.parent.resolve(name)))
     }
 
-    /** 造一个装着可执行 `native-image` 的假工具目录。 */
+    /**
+     * 候选目录里同名库取先命中的那个。
+     *
+     * 落盘后只有一份文件，所以「先到先得」不是取舍而是唯一说得通的行为 ——
+     * 后到的会静默盖掉前面的，而 JVM 也只会加载先找到的那份。
+     */
+    @Test
+    fun keepsFirstNativeLibraryOnNameCollision(
+        @TempDir root: File,
+    ) {
+        val dir = root.toPath()
+        val builder = NativeImageBuilder(RecordingRunner(), fs)
+        val name = PlatformDetector.formatLibraryName("webview")
+        val first = dir.resolve("first").also { fs.writeText(it.resolve(name), "first") }
+        val second = dir.resolve("second").also { fs.writeText(it.resolve(name), "second") }
+        fs.writeText(first.resolve("a.jar"), "jar")
+        fs.writeText(second.resolve("b.jar"), "jar")
+        val binary = outBinary(dir, "krema-app")
+
+        val copied =
+            builder.copyNativeLibrary(
+                Classpath(listOf(first.resolve("a.jar"), second.resolve("b.jar")), dir.resolve("classes")),
+                binary,
+            )
+
+        assertEquals(listOf(first.resolve(name)), copied)
+        assertEquals("first", fs.readText(binary.parent.resolve(name)))
+    }
+
+    /**
+     * 候选目录里有几个**不同名**的库就拷几个。
+     *
+     * `java.library.path` 天生是「目录里可能有多个 `.so`」的语义，捞到第一个就收工会漏。
+     */
+    @Test
+    fun copiesEveryDistinctNativeLibraryBesideTheBinary(
+        @TempDir root: File,
+    ) {
+        val dir = root.toPath()
+        val builder = NativeImageBuilder(RecordingRunner(), fs)
+        val libDir = dir.resolve("lib")
+        val names = listOf("webview", "extra").map(PlatformDetector::formatLibraryName)
+        names.forEach { fs.writeText(libDir.resolve(it), it) }
+        val binary = outBinary(dir, "krema-app")
+
+        val copied =
+            builder.copyNativeLibrary(
+                Classpath(listOf(dir.resolve("a.jar")), dir.resolve("classes"), libDir),
+                binary,
+            )
+
+        assertEquals(names.map(libDir::resolve), copied)
+        names.forEach { assertEquals(it, fs.readText(binary.parent.resolve(it))) }
+    }
+
+    /**
+     * 把参数文件切回 token。
+     *
+     * [ArgFiles.render] 保证一行一个 token，所以按行切、剥掉最外层成对引号即可 ——
+     * 这里刻意不复刻 launcher 的空白分词，免得测的是自己的正则。
+     */
+    private fun readArguments(file: Path): List<String> =
+        Files
+            .readString(file)
+            .lineSequence()
+            .filter(String::isNotEmpty)
+            .map { it.removeSurrounding("\"") }
+            .toList()
+
+    /** 建一个假的可执行文件路径，父目录就是产物目录。 */
+    private fun outBinary(
+        dir: Path,
+        name: String,
+    ): Path = dir.resolve("out/$name").also { fs.writeText(it, "bin") }
+
+    /**
+     * 造一个装着可执行 `native-image` 的假工具目录。
+     *
+     * 只看名字，不看是不是真 GraalVM —— 有一条记录命令行就够，本机不需要装 GraalVM。
+     */
     private fun fakeToolDir(home: Path): Path {
         val tool = toolIn(home)
         fs.writeText(tool, "bin")
@@ -153,6 +314,11 @@ class JavaCompilerNativeTest {
             fs,
             mapOf("KREMA_JAVA_HOME" to fakeJdk.toString(), "GRAALVM_HOME" to graalHome.toString()),
         )
+    }
+
+    private companion object {
+        /** 单个 classpath 条目撑到 30000 字符上，必然超过命令行门限；文件名本身得留在 255 字节内。 */
+        private val PADDING_LONG = "x".repeat(20_000)
     }
 
     /** 只记录命令，不起真子进程。 */

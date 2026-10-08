@@ -68,8 +68,9 @@ class NioJavaCompiler(
                 ?: error("找不到 native-image —— 装上 GraalVM，或把 GRAALVM_HOME / JAVA_HOME 指向它，再或者让它进 PATH")
         val outputBinary = outputBinary(project)
         val resourceConfig = nativeImageBuilder.writeResourceConfig(project, outputDir)
+        val classpathArgFile = nativeImageBuilder.classpathArgFile(classpath, classesDir, outputDir)
         val command =
-            nativeImageBuilder.command(project, classpath, classesDir, outputBinary, resourceConfig, tool)
+            nativeImageBuilder.command(project, classpath, classesDir, outputBinary, resourceConfig, tool, classpathArgFile)
 
         val exit = commandRunner.exec(command, project.dir)
         check(exit == 0) { "native-image 编译失败，退出码 $exit" }

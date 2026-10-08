@@ -59,13 +59,32 @@ class OrchestrationTest {
         assertEquals(sub.resolve(expected), finder.findLibrary(listOf(dir)))
     }
 
+    /**
+     * 目录里的动态库不挑名字。
+     *
+     * webview 只是其中一个库：`java.library.path` 天生允许目录里躺着好几个 `.so`，
+     * 按名字只认 `libwebview.so` 会漏掉同目录的其它原生库。
+     */
     @Test
-    fun missesMisnamedNativeLibrary(
+    fun findsNativeLibrariesBySuffixNotName(
         @TempDir root: File,
     ) {
         val dir = root.toPath()
         if (PlatformDetector.detect() != Platform.LINUX) return
-        fs.writeText(dir.resolve("libkrema_webview.so"), "so")
+        val other = dir.resolve("libkrema_other.so")
+        fs.writeText(other, "so")
+
+        assertEquals(listOf(other), NativeLibraryFinder(fs).findLibraries(listOf(dir)))
+    }
+
+    /** 非动态库后缀的同目录文件不算命中。 */
+    @Test
+    fun ignoresNonLibrariesInTheCandidateDir(
+        @TempDir root: File,
+    ) {
+        val dir = root.toPath()
+        fs.writeText(dir.resolve("app.jar"), "jar")
+        fs.writeText(dir.resolve("readme.txt"), "txt")
 
         assertNull(NativeLibraryFinder(fs).findLibrary(listOf(dir)))
     }
