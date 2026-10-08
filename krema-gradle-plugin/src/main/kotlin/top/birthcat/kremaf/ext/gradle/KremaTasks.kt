@@ -31,6 +31,7 @@ object KremaTaskNames {
 
 internal fun Project.registerKremaTasks() {
     val ext = extensions.getByType(KremaExtension::class.java)
+    val frontend = ext.frontend
 
     tasks.register(KremaTaskNames.INIT, KremaInitTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
@@ -42,39 +43,39 @@ internal fun Project.registerKremaTasks() {
     tasks.register(KremaTaskNames.BUILD, KremaBuildTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
         task.description = "编译 Java 源码并跑一次前端生产构建"
-        task.configureProject(ext)
+        task.configureProject(ext, frontend)
     }
 
     tasks.register(KremaTaskNames.BUILD_NATIVE, KremaBuildNativeTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
         task.description = "在 kremaBuild 之上打 native-image（工具链见 #26）"
-        task.configureProject(ext)
+        task.configureProject(ext, frontend)
     }
 
     tasks.register(KremaTaskNames.BUNDLE, KremaBundleTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
         task.description = "生成可分发的平台安装包"
-        task.configureProject(ext)
+        task.configureProject(ext, frontend)
         task.target.convention(currentTarget())
     }
 
     tasks.register(KremaTaskNames.DEV, KremaDevTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
         task.description = "起前端 dev server 与应用窗口（长驻，不进 CI 门禁）"
-        task.configureProject(ext)
+        task.configureProject(ext, frontend)
     }
 
     tasks.register(KremaTaskNames.SIGNER_GENERATE, KremaSignerGenerateTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
         task.description = "生成一对签名密钥"
-        task.configureProject(ext)
+        task.configureProject(ext, frontend)
         task.privateKey.convention(task.outputDir.file("keys/krema.key"))
     }
 
     tasks.register(KremaTaskNames.SIGNER_SIGN, KremaSignerSignTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
         task.description = "用私钥给产物签名"
-        task.configureProject(ext)
+        task.configureProject(ext, frontend)
     }
 }
 
@@ -83,7 +84,10 @@ internal fun Project.registerKremaTasks() {
  *
  * 默认值唯一住所是 `KremaRegistry.Build()` 与 `krema.toml`；这里只把「从哪取」接上，不给业务默认值。
  */
-internal fun KremaProjectTask.configureProject(ext: KremaExtension) {
+internal fun KremaProjectTask.configureProject(
+    ext: KremaExtension,
+    frontend: KremaFrontendExtension = ext.frontend,
+) {
     projectDir.convention(project.layout.projectDirectory)
     configFilePath.convention(
         ext.configFile.orElse(project.layout.projectDirectory.file("krema.toml")).map { it.asFile.absolutePath },
@@ -91,9 +95,9 @@ internal fun KremaProjectTask.configureProject(ext: KremaExtension) {
     outputDir.convention(ext.outputDir.orElse(project.layout.buildDirectory.dir("krema")))
     classOutputDir.convention(project.layout.buildDirectory.dir("classes/kotlin/main"))
     project.configurations.findByName("runtimeClasspath")?.let(runtimeClasspath::from)
-    frontendCommand.convention(ext.frontendCommand)
-    frontendDevCommand.convention(ext.frontendDevCommand)
-    frontendDevUrl.convention(ext.frontendDevUrl)
+    frontendBuildCommand.convention(frontend.buildCommand)
+    frontendDevCommand.convention(frontend.devCommand)
+    frontendDevUrl.convention(frontend.devUrl)
     mainClass.convention(ext.mainClass)
 }
 

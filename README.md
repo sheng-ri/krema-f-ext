@@ -42,21 +42,27 @@ plugins {
 
 krema {
     // krema.toml 位置，默认项目根下 krema.toml
-    configFile.set(layout.projectDirectory.file("krema.toml"))
+    configFile = layout.projectDirectory.file("krema.toml")
 
     // 产物根目录，默认 build/krema
-    outputDir.set(layout.buildDirectory.dir("krema"))
+    outputDir = layout.buildDirectory.dir("krema")
+
+    // 主类，覆盖 krema.toml 的 [build].main_class
+    mainClass = "com.example.app.Main"
 
     // [build] 一道缝：这里填的值覆盖 krema.toml 的同名项，不填则以 toml 为准
-    frontendCommand.set("npm run build")
-    frontendDevCommand.set("npm run dev")
-    frontendDevUrl.set("http://localhost:5173")
-    mainClass.set("com.example.app.Main")
+    frontend {
+        buildCommand = "npm run build"
+        devCommand = "npm run dev"
+        devUrl = "http://localhost:5173"
+    }
 }
 ```
 
 `krema.toml` 管 Krema 语义（`[window]`/`[permissions]`/`[package]` 等），`krema { }` 只管构建语义。
-判据是「谁比 toml 更懂」：上面六项 Gradle 更懂，其余 section 归 toml。
+判据是「谁比 toml 更懂」：上面五项 Gradle 更懂，其余 section 归 toml。
+
+扩展里的字段都是 Gradle `Property`：既可以直接赋值（`buildCommand = "..."`），也可以 `buildCommand.set("...")`。
 
 **除 `kremaInit` 外，所有 task 都要求 `krema.toml` 已存在**，缺失即硬报错。
 

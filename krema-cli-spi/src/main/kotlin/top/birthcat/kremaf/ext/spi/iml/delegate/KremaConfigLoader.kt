@@ -7,6 +7,7 @@ package top.birthcat.kremaf.ext.spi.iml.delegate
 import com.moandjiezana.toml.Toml
 import top.birthcat.kremaf.ext.spi.port.Build
 import top.birthcat.kremaf.ext.spi.port.Bundle
+import top.birthcat.kremaf.ext.spi.port.Frontend
 import top.birthcat.kremaf.ext.spi.port.KremaConfig
 import top.birthcat.kremaf.ext.spi.port.MacOSSigning
 import top.birthcat.kremaf.ext.spi.port.Window
@@ -54,6 +55,7 @@ class KremaConfigLoader {
             description = pkg?.getString("description", "") ?: "",
             window = fromWindow(window),
             build = fromBuild(build),
+            frontend = fromFrontend(build),
             bundle = fromBundle(bundle),
             permissions = toml.getTable("permissions")?.getList<String>("allow") ?: emptyList(),
             updaterPubkey = updater?.getString("pubkey"),
@@ -75,15 +77,20 @@ class KremaConfigLoader {
 
     private fun fromBuild(toml: Toml?): Build =
         Build(
-            frontendCommand = toml?.getString("frontend_command", "npm run build") ?: "npm run build",
-            frontendDevCommand = toml?.getString("frontend_dev_command", "npm run dev") ?: "npm run dev",
-            frontendDevUrl =
-                toml?.getString("frontend_dev_url", "http://localhost:5173")
-                    ?: "http://localhost:5173",
             outDir = toml?.getString("out_dir", "dist") ?: "dist",
             javaSourceDir = toml?.getString("java_source_dir", "src-java") ?: "src-java",
             mainClass = toml?.getString("main_class"),
             assetsPath = toml?.getString("assets_path", "assets") ?: "assets",
+        )
+
+    /** 前端命令落在 `[build]` 段的 `frontend_*` 键上，但住处是 [Frontend]。 */
+    private fun fromFrontend(toml: Toml?): Frontend =
+        Frontend(
+            buildCommand = toml?.getString("frontend_command", "npm run build") ?: "npm run build",
+            devCommand = toml?.getString("frontend_dev_command", "npm run dev") ?: "npm run dev",
+            devUrl =
+                toml?.getString("frontend_dev_url", "http://localhost:5173")
+                    ?: "http://localhost:5173",
         )
 
     private fun fromBundle(toml: Toml?): Bundle {

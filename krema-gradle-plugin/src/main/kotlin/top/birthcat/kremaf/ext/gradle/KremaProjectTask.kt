@@ -57,7 +57,7 @@ abstract class KremaProjectTask : DefaultTask() {
     /** `[build]` 缝：前端构建命令，覆盖 toml。 */
     @get:Input
     @get:Optional
-    abstract val frontendCommand: Property<String>
+    abstract val frontendBuildCommand: Property<String>
 
     /** `[build]` 缝：前端 dev 命令，覆盖 toml。 */
     @get:Input
@@ -116,13 +116,7 @@ abstract class KremaProjectTask : DefaultTask() {
                     mainClass = mainClass.orNull ?: build.mainClass,
                     sourceDir = dir.resolve(build.javaSourceDir),
                 ),
-            frontend =
-                Frontend(
-                    buildCommand = build.frontendCommand,
-                    devCommand = build.frontendDevCommand,
-                    devUrl = build.frontendDevUrl,
-                    workingDir = dir,
-                ),
+            frontend = frontend(config.frontend),
             bundle =
                 BundleSettings(
                     appName = config.packageName,
@@ -136,6 +130,20 @@ abstract class KremaProjectTask : DefaultTask() {
         )
     }
 
+    /**
+     * 前端输入。
+     *
+     * 前端字段在 `krema.toml` 里写作 `[build] frontend_*`，但住所在 [Frontend] ——
+     * 这里是把「怎么落库」接到「喂给编排层」的唯一一处，`Build` 里不再留副本。
+     */
+    private fun frontend(toml: Frontend): Frontend =
+        toml.copy(
+            buildCommand = frontendBuildCommand.getOrElse(toml.buildCommand),
+            devCommand = frontendDevCommand.getOrElse(toml.devCommand),
+            devUrl = frontendDevUrl.getOrElse(toml.devUrl),
+            workingDir = projectPath(),
+        )
+
     private fun loadConfig(toml: Path): KremaConfig {
         if (!Files.isRegularFile(toml)) {
             error("找不到 krema.toml（应为 $toml）—— 先跑 kremaInit，或把 krema.configFile 指对")
@@ -144,11 +152,5 @@ abstract class KremaProjectTask : DefaultTask() {
         return loaded.copy(build = loaded.build.applyOverrides())
     }
 
-    private fun Build.applyOverrides(): Build =
-        copy(
-            frontendCommand = this@KremaProjectTask.frontendCommand.getOrElse(frontendCommand),
-            frontendDevCommand = this@KremaProjectTask.frontendDevCommand.getOrElse(frontendDevCommand),
-            frontendDevUrl = this@KremaProjectTask.frontendDevUrl.getOrElse(frontendDevUrl),
-            mainClass = this@KremaProjectTask.mainClass.orNull ?: mainClass,
-        )
+    private fun Build.applyOverrides(): Build = copy(mainClass = this@KremaProjectTask.mainClass.orNull ?: mainClass)
 }

@@ -66,7 +66,14 @@ class KremaPluginTest {
             """
             plugins { id("top.birthcat.kremaf.ext") }
 
-            krema { configFile.set(layout.projectDirectory.file("krema.toml")) }
+            krema {
+                configFile = layout.projectDirectory.file("krema.toml")
+                frontend {
+                    buildCommand = "npm run build"
+                    devCommand = "npm run dev"
+                    devUrl = "http://localhost:5173"
+                }
+            }
             """.trimIndent(),
         )
 

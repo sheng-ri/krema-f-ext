@@ -32,8 +32,10 @@ class KremaProjectTest {
         val project = KremaProject(root.toPath(), KremaConfig(version = "9.9.9"))
 
         assertEquals("9.9.9", project.config.version)
-        assertEquals("npm run build", project.config.build.frontendCommand)
         assertEquals("src-java", project.config.build.javaSourceDir)
         assertFalse(project.config.window.fullscreen)
+
+        // 前端命令只住 Frontend 一间；Build 里没有副本可断言。
+        assertEquals("npm run build", project.frontend.buildCommand)
     }
 }

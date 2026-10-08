@@ -10,7 +10,8 @@ import org.gradle.api.Project
 /** 薄壳插件：注册 `krema` 扩展与 task 组。 */
 class KremaPlugin : Plugin<Project> {
     override fun apply(project: Project) {
-        project.extensions.create("krema", KremaExtension::class.java)
+        val extension = project.extensions.create("krema", KremaExtension::class.java)
+        extension.frontend = project.extensions.create("frontend", KremaFrontendExtension::class.java)
         project.registerKremaTasks()
     }
 }
