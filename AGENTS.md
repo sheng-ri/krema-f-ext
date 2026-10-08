@@ -12,6 +12,18 @@
 - 不用注释复述代码。注释解释「为什么」，不解释「是什么」。
 - 提交前 `./gradlew spotlessCheck` 必须干净。
 
+## 外部 skill
+
+- 涉及 Gradle API（`org.gradle.api` / `org.gradle.api.tasks` / `org.gradle.kotlin.dsl`）的改动，动手前必须先装对应版本的 skill。
+
+```bash
+npx skills add \
+  "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-api-9.8.0/-/@birthcat-dev/gradle-plugin-api-9.8.0-9.8.0.tgz" \
+  "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-tasks-9.8.0/-/@birthcat-dev/gradle-plugin-tasks-9.8.0-9.8.0.tgz" \
+  "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-kts-9.8.0/-/@birthcat-dev/gradle-kts-9.8.0-9.8.0.tgz" \
+  -g -a codebuddy -y
+```
+
 ## 提交规范
 
 - pr最终合并的commit遵循`[chore,ref,feat,fix]:` 开头, 末尾引用issue结尾。例: `feat: 一个功能 (#1)`
