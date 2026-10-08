@@ -137,7 +137,7 @@ class KremaPluginTest {
         writeSettings(projectDir)
         Files.writeString(
             projectDir.toPath().resolve("build.gradle.kts"),
-            """plugins { id("top.birthcat.kremaf.ext") }""",
+            typedBundleConfig("deb"),
         )
         writeToml(projectDir)
 
@@ -153,6 +153,54 @@ class KremaPluginTest {
             "kremaBundle 没落产物目录",
         )
     }
+
+    @Test
+    fun bundleFailsLoudlyWithoutFormat(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            """plugins { id("top.birthcat.kremaf.ext") }""",
+        )
+        writeToml(projectDir)
+
+        val result = runGradle(projectDir, KremaTaskNames.BUNDLE, expectFailure = true)
+
+        assertTrue(
+            result.output.contains("必须显式给 format"),
+            "不给 format 时应当硬报错且指向选哪个 format：\n${result.output}",
+        )
+    }
+
+    @Test
+    fun bundleFailsLoudlyOnUnknownFormat(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            typedBundleConfig("dmg"),
+        )
+        writeToml(projectDir)
+
+        val result = runGradle(projectDir, KremaTaskNames.BUNDLE, expectFailure = true)
+
+        assertTrue(
+            result.output.contains("未知的 bundle format 'dmg'"),
+            "给错 format 时应当报错并列出可选值：\n${result.output}",
+        )
+    }
+
+    /** 用类型化 `named` 配 format：无类型 lambda 里解析不到 task 的属性。 */
+    private fun typedBundleConfig(format: String) =
+        """
+        plugins { id("top.birthcat.kremaf.ext") }
+
+        tasks.named<top.birthcat.kremaf.ext.gradle.task.KremaBundleTask>("${KremaTaskNames.BUNDLE}") {
+            this.format.set("$format")
+        }
+        """.trimIndent()
 
     private fun writeToml(projectDir: File) {
         Files.writeString(
