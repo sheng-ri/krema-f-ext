@@ -15,7 +15,6 @@
 ## 外部 skill
 
 - 涉及 Gradle API（`org.gradle.api` / `org.gradle.api.tasks` / `org.gradle.kotlin.dsl`）的改动，动手前必须先装对应版本的 skill。
-- 本仓只认这三个 npm 制品，地址与版本一律硬编码，禁止自选源、自换包名或改版本：
 
 ```bash
 npx skills add \
@@ -24,8 +23,6 @@ npx skills add \
   "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-kts-9.8.0/-/@birthcat-dev/gradle-kts-9.8.0-9.8.0.tgz" \
   -g -a codebuddy -y
 ```
-
-- 版本号跟 Gradle 版本走（`gradle/wrapper/gradle-wrapper.properties`）：升 Gradle 必须同步替换以上三条 URL 中的版本号，并检查制品是否存在，禁止留旧版本。
 
 ## 提交规范
 
