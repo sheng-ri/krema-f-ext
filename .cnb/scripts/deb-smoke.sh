@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Linux 真产物验收：造一个最小 consumer 工程，让 kremaBundle 真打一个 .deb。
 #
-# 只在手动入口跑 —— .deb 会把整个 runtime（几百 MB）塞进去，进 PR 门禁太贵（见 #27）。
+# 挂在 PR 门禁上（.cnb.yml 的 pull_request）—— 验的是 PR 自己的代码，一次就够，不随 push 翻倍。
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"

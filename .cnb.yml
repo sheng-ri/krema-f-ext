@@ -5,6 +5,13 @@
   script:
     - ./gradlew spotlessCheck test --configuration-cache
 
+# Linux 真产物验收：造一个最小 consumer 工程，真跑 kremaBundle 打出 .deb 再验包。
+# 单测只能断言命令形状，「真能打出包」只有这支脚本能证明。
+.deb: &deb
+  name: Linux .deb 真打包验收
+  script:
+    - .cnb/scripts/deb-smoke.sh
+
 # 构建环境：本仓 Dockerfile 动态构建，平台按 hash 缓存。
 # Gradle 缓存挂到构建节点，跨流水线复用依赖与 wrapper。
 .pipeline: &pipeline
@@ -33,12 +40,16 @@ $:
       stages:
         - *verify
 
+  # PR 门禁 = 格式/编译/单测 + 真打 .deb。
+  # `.deb` 验收挂这里而不是 push：push 上任何分支都跑，会重复烧整份 runtime；
+  # PR 是「合并前」这一次，跑一次就够，且验的正是 PR 自己的代码。
   pull_request:
     verify:
       name: PR 门禁
       <<: *pipeline
       stages:
         - *verify
+        - *deb
 
   # 正式发布。
   web_trigger_release:
@@ -65,16 +76,3 @@ $:
           script:
             - java -version
             - ./gradlew --version
-
-  # 手动入口：Linux 真产物验收。
-  #
-  # 不进 PR 门禁 —— jpackage 会把整个 runtime（几百 MB）打进 .deb，每次 push 都跑太贵（见 #27）。
-  # 这里真打一个 .deb 并验包，是「Linux 打包路径真接通」的唯一硬证据。
-  web_trigger_bundle_deb:
-    - name: Linux .deb 真打包验收
-      <<: *pipeline
-      stages:
-        - *verify
-        - name: 真打 .deb
-          script:
-            - .cnb/scripts/deb-smoke.sh

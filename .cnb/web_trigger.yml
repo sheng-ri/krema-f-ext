@@ -11,6 +11,3 @@ branch:
       - name: 工具链自检
         description: 打印 JDK 与 Gradle 版本，确认构建环境可用
         event: web_trigger
-      - name: Linux .deb 真打包验收
-        description: 真跑一遍 jpackage --type deb，打出 .deb 并验包（约几十 MB，稍慢）
-        event: web_trigger_bundle_deb
