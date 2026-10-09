@@ -114,17 +114,92 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        Files.writeString(
-            projectDir.toPath().resolve("build.gradle.kts"),
-            """plugins { id("top.birthcat.kremaf.ext") }""",
-        )
+        val fakeNpm =
+            fakeNpm(
+                projectDir,
+                "mkdir -p build/krema/dist\nprintf '<html></html>' > build/krema/dist/index.html",
+            )
+        // 没有 krema.toml 是这条用例的要点；但 kremaBuild 现在也会跑前端，所以给一份最小前端输入。
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
 
-        val result = runGradle(projectDir, KremaTaskNames.BUILD)
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUILD, fakeNpm = fakeNpm)
 
         assertEquals(
             TaskOutcome.SUCCESS,
             result.task(":${KremaTaskNames.BUILD}")?.outcome,
             "默认路径下没有 krema.toml 不应报错：\n${result.output}",
+        )
+        assertTrue(
+            projectDir
+                .toPath()
+                .resolve("build/krema/dist/index.html")
+                .toFile()
+                .isFile,
+            "前端没产出 dist：\n${result.output}",
+        )
+    }
+
+    @Test
+    fun frontendDistIsUpToDateOnSecondRun(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        val fakeNpm =
+            fakeNpm(
+                projectDir,
+                "mkdir -p build/krema/dist\nprintf '<html></html>' > build/krema/dist/index.html",
+            )
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
+
+        val first = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUILD, fakeNpm = fakeNpm)
+
+        assertEquals(TaskOutcome.SUCCESS, first.task(":${KremaTaskNames.BUILD}")?.outcome, first.output)
+        assertTrue(
+            projectDir
+                .toPath()
+                .resolve("build/krema/dist/index.html")
+                .toFile()
+                .isFile,
+            "首次运行没产出 dist：\n${first.output}",
+        )
+
+        val second = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUILD, fakeNpm = fakeNpm)
+
+        assertEquals(TaskOutcome.UP_TO_DATE, second.task(":${KremaTaskNames.BUILD}")?.outcome, second.output)
+        assertEquals(
+            TaskOutcome.UP_TO_DATE,
+            second.task(":${KremaTaskNames.FRONTEND_BUILD}")?.outcome,
+            "前端 task 输入没变时应当 UP-TO-DATE：\n${second.output}",
+        )
+    }
+
+    @Test
+    fun frontendBuildFailureSurfacesCommandOutput(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        val marker = "FAKE_NPM_DIAGNOSTIC_LINE_abc123"
+        val fakeNpm = fakeNpm(projectDir, "echo \"$marker\" >&2\nexit 1")
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
+
+        val result =
+            runGradleWithFakeNpm(
+                projectDir,
+                KremaTaskNames.BUILD,
+                fakeNpm = fakeNpm,
+                expectFailure = true,
+            )
+
+        assertTrue(
+            result.output.contains("前端构建失败"),
+            "失败信息应当带上命令输出：\n${result.output}",
+        )
+        assertTrue(
+            result.output.contains(marker),
+            "失败信息应当包含命令自身打印的内容：\n${result.output}",
         )
     }
 
@@ -224,4 +299,58 @@ class KremaPluginTest {
         .withPluginClasspath()
         .withArguments(*args, "--configuration-cache", "--stacktrace")
         .let { if (expectFailure) it.buildAndFail() else it.build() }
+
+    /**
+     * 与 [runGradle] 同款，但可选地用一个假 `npm` 覆盖 PATH。
+     *
+     * 唯一接缝就是 TestKit：生产代码不为可测性留任何执行口，所以测试自己写一个假可执行文件，
+     * 前置到 PATH 让插件的 `ExecOperations` 找到它（[withEnvironment] 会整体替换环境，
+     * 故只保留 PATH，并把原 PATH 接在后面）。长驻 daemon 会缓存进程环境，调用方同时把
+     * `buildCommand` 指向假 npm 的绝对路径，双保险。不传 [fakeNpm] 就不改环境。
+     */
+    private fun runGradleWithFakeNpm(
+        projectDir: File,
+        vararg args: String,
+        fakeNpm: File? = null,
+        expectFailure: Boolean = false,
+    ) = GradleRunner
+        .create()
+        .withProjectDir(projectDir)
+        .withPluginClasspath()
+        .withArguments("--configuration-cache", "--stacktrace", *args)
+        .let { runner ->
+            val configured =
+                if (fakeNpm != null) {
+                    runner.withEnvironment(
+                        mapOf("PATH" to "${fakeNpm.parentFile.absolutePath}${File.pathSeparator}${System.getenv("PATH")}"),
+                    )
+                } else {
+                    runner
+                }
+            if (expectFailure) configured.buildAndFail() else configured.build()
+        }
+
+    /** 在项目里写一个可执行假 `npm`，脚本内容由调用方给；返回该可执行文件本身。 */
+    private fun fakeNpm(
+        projectDir: File,
+        script: String,
+    ): File {
+        val dir = projectDir.toPath().resolve("fakebin").toFile()
+        dir.mkdirs()
+        val npm = dir.toPath().resolve("npm").toFile()
+        Files.writeString(npm.toPath(), "#!/bin/sh\n$script\n")
+        npm.setExecutable(true)
+        return npm
+    }
+
+    /** 写一份 `build.gradle.kts`，前端生产命令直接指向假 npm 的绝对路径（外加 `run build` 占位参数）。 */
+    private fun frontendBuildGradle(npmPath: String) =
+        """
+        plugins { id("top.birthcat.kremaf.ext") }
+        krema {
+            frontend {
+                buildCommand = "$npmPath run build"
+            }
+        }
+        """.trimIndent()
 }

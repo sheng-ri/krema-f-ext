@@ -61,7 +61,7 @@ krema {
 | task | 对应上游 CLI | 做什么 |
 |---|---|---|
 | `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`），主类落在 `src/main/java` |
-| `kremaBuild` | build | 让 Gradle 编译主 source set；前端 dist 由 #54 接上 |
+| `kremaBuild` | build | 让 Gradle 编译主 source set，并跑前端生产构建（`frontend.buildCommand`），把 `dist` 作为可缓存、UP-TO-DATE 的产出收进 `build/krema` |
 | `kremaBuildNative` | build --native | 常规编译之后打 native-image |
 | `kremaBundle` | bundle | 按平台生成可分发包，再把 classpath 与原生库放进去 |
 | `kremaDev` | dev | 起前端 dev server 并编译，长驻，不进 CI 门禁 |
