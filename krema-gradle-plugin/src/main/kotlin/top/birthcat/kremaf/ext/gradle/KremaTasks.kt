@@ -9,6 +9,7 @@ import top.birthcat.kremaf.ext.gradle.task.KremaBuildNativeTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
 import top.birthcat.kremaf.ext.gradle.task.KremaDevTask
+import top.birthcat.kremaf.ext.gradle.task.KremaFrontendBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaInitTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerGenerateTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerSignTask
@@ -26,6 +27,9 @@ object KremaTaskNames {
     const val SIGNER_GENERATE = "kremaSignerGenerate"
     const val SIGNER_SIGN = "kremaSignerSign"
 
+    /** 内部支撑 task：跑前端生产构建，不是用户面向的 task，不进 `krema` 分组也不进 `ALL`。 */
+    const val FRONTEND_BUILD = "kremaFrontendBuild"
+
     /** 全部 task 名，声明顺序即 `gradlew tasks` 里的出现顺序。 */
     val ALL = listOf(INIT, BUILD, BUILD_NATIVE, BUNDLE, DEV, SIGNER_GENERATE, SIGNER_SIGN)
 }
@@ -40,12 +44,29 @@ internal fun Project.registerKremaTasks() {
         task.outputDir.convention(layout.projectDirectory)
     }
 
+    tasks.register(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java) { task ->
+        // 内部支撑 task：不进 krema 分组，也不出现在 KremaTaskNames.ALL（用户面向的 7 张）。
+        task.group = null
+        task.description = "跑前端生产构建（npm 命令），产物为 build/krema/dist 并声明成可缓存输出"
+        task.configureProject(ext)
+        task.buildCommand.convention(ext.frontend.buildCommand)
+        task.distDir.convention(task.outputDir.dir("dist"))
+        // 前端输入在项目根解析；哪些锁文件存在就收集哪些，缺失的候选自然不在集合里。
+        val projectDir = project.layout.projectDirectory
+        task.frontendInputs.from(
+            listOf("package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml")
+                .map { projectDir.file(it) },
+        )
+    }
+
     tasks.register(KremaTaskNames.BUILD, KremaBuildTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "让 Gradle 编译主 source set，前端 dist 由 #54 接上"
+        task.description = "让 Gradle 编译主 source set，并把前端 dist 收进 build/krema"
         task.configureProject(ext)
         // 编译交回 Gradle：kremaBuild 跑在 compileJava / processResources 之后。
         task.dependsOn(tasks.named("classes"))
+        // 前端 dist 是 kremaBuild 的共用前置：声明成依赖后它才成为可缓存、UP-TO-DATE 的产出。
+        task.dependsOn(tasks.named(KremaTaskNames.FRONTEND_BUILD))
     }
 
     tasks.register(KremaTaskNames.BUILD_NATIVE, KremaBuildNativeTask::class.java) { task ->
