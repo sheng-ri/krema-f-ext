@@ -2,7 +2,7 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.spi.iml.delegate
+package top.birthcat.kremaf.ext.gradle
 
 import java.io.File
 import java.util.Locale

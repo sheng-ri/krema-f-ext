@@ -13,9 +13,8 @@ import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
-import top.birthcat.kremaf.ext.spi.iml.delegate.InitSettings
-import top.birthcat.kremaf.ext.spi.iml.delegate.TemplateGenerator
-import top.birthcat.kremaf.ext.spi.iml.nativeimpl.NioFileSystem
+import top.birthcat.kremaf.ext.gradle.InitSettings
+import top.birthcat.kremaf.ext.gradle.TemplateGenerator
 
 /**
  * 生成 Krema 项目骨架。
@@ -39,7 +38,7 @@ abstract class KremaInitTask : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        TemplateGenerator(NioFileSystem()).generate(
+        TemplateGenerator().generate(
             projectDir.get().asFile.toPath(),
             InitSettings.defaults(appName.getOrElse("krema-app")),
         )

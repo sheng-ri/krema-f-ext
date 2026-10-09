@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":krema-cli-spi"))
+    implementation(libs.toml4j)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

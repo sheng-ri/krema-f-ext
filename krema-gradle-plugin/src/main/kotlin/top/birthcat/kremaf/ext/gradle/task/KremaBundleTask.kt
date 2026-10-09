@@ -9,9 +9,10 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.KremaProjectTask
+import top.birthcat.kremaf.ext.gradle.PlatformBundler
 
-/** 生成可分发的平台安装包。 */
-@DisableCachingByDefault(because = "jpackage 产物带平台签名与时间戳，不可跨机器复用")
+/** 按目标平台生成可分发形态的 bundle。 */
+@DisableCachingByDefault(because = "启动器按本机平台落盘，不做跨机器复用")
 abstract class KremaBundleTask : KremaProjectTask() {
     /** 目标平台标识，形如 `linux-x86_64`。 */
     @get:Input
@@ -19,15 +20,6 @@ abstract class KremaBundleTask : KremaProjectTask() {
 
     @TaskAction
     fun bundle() {
-        val project = kremaProject()
-        val ports = ports()
-        val classpath = ports.classpath(project)
-        val settings = project.bundle
-        val bundleDir =
-            ports
-                .bundleFactory()
-                .create(target.get())
-                .createProductionBundle(settings)
-        ports.deployer().deploy(project, bundleDir, classpath)
+        PlatformBundler(target.get()).createProductionBundle(bundleSettings())
     }
 }

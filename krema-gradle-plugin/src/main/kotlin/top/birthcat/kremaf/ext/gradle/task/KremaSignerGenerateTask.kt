@@ -8,6 +8,7 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
+import top.birthcat.kremaf.ext.gradle.Ed25519Signer
 import top.birthcat.kremaf.ext.gradle.KremaProjectTask
 
 /** 生成一对签名密钥。 */
@@ -19,13 +20,12 @@ abstract class KremaSignerGenerateTask : KremaProjectTask() {
 
     @TaskAction
     fun generate() {
-        kremaProject()
         val keysDir =
             outputDir
                 .get()
                 .asFile
                 .toPath()
                 .resolve("keys")
-        ports().signer().generate(privateKey.orNull?.asFile?.toPath() ?: keysDir.resolve("krema.key"))
+        Ed25519Signer().generate(privateKey.orNull?.asFile?.toPath() ?: keysDir.resolve("krema.key"))
     }
 }
