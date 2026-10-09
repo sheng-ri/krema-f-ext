@@ -62,8 +62,12 @@ krema {
 |---|---|---|
 | `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`），主类落在 `src/main/java` |
 | `kremaBuild` | build | 让 Gradle 编译主 source set，并跑前端生产构建（`frontend.buildCommand`），把 `dist` 作为可缓存、UP-TO-DATE 的产出收进 `build/krema` |
-| `kremaBuildNative` | build --native | 常规编译之后打 native-image |
-| `kremaBundle` | bundle | 按平台生成可分发包，再把 classpath 与原生库放进去 |
-| `kremaDev` | dev | 起前端 dev server 并编译，长驻，不进 CI 门禁 |
+| `kremaBundleDev` | bundle | dev 档打包：最小形态（macOS 才给正经 `.app`，其余平台靠 devUrl 拉前端），不打包 `dist`，产物落 `build/kerma/dev` |
+| `kremaBundleProd` | bundle | prod 档打包：全平台出完整可分发形态，并把 `dist` 收进去，产物落 `build/kerma/prod` |
+| `kremaBundleRunDev` | dev | 起前端 dev server 并跑 dev 档应用，长驻前台，中断时回收进程，不进 CI 门禁 |
+| `kremaBundleRunProd` | dev | 跑 prod 档应用，长驻前台，中断时回收进程，不进 CI 门禁 |
 | `kremaSignerGenerate` | signer generate | 生成一对签名密钥（Ed25519） |
 | `kremaSignerSign` | signer sign | 用私钥给产物签名 |
+
+打包建立在 `kremaBuild` 之上（先编译、再收前端），dev 与 prod 各占独立的产物目录互不干扰。
+签名与 native-image 不在本骨架范围内（见对应上游票）。

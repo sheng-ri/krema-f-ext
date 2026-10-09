@@ -40,7 +40,7 @@ class KremaPluginTest {
     }
 
     @Test
-    fun declaresAllSevenTasksInKremaGroup(
+    fun declaresAllEightTasksInKremaGroup(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -133,7 +133,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/krema/dist/index.html")
+                .resolve("build/kerma/dist/index.html")
                 .toFile()
                 .isFile,
             "前端没产出 dist：\n${result.output}",
@@ -148,7 +148,7 @@ class KremaPluginTest {
         val fakeNpm =
             fakeNpm(
                 projectDir,
-                "mkdir -p build/krema/dist\nprintf '<html></html>' > build/krema/dist/index.html",
+                "mkdir -p build/kerma/dist\nprintf '<html></html>' > build/kerma/dist/index.html",
             )
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
@@ -159,7 +159,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/krema/dist/index.html")
+                .resolve("build/kerma/dist/index.html")
                 .toFile()
                 .isFile,
             "首次运行没产出 dist：\n${first.output}",
@@ -208,15 +208,20 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
+        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/kerma/dist\necho hi > build/kerma/dist/index.html")
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(
             projectDir.toPath().resolve("build.gradle.kts"),
             """
             plugins { id("top.birthcat.kremaf.ext") }
-            krema { configFile = layout.projectDirectory.file("nope.toml") }
+            krema {
+                configFile = layout.projectDirectory.file("nope.toml")
+                frontend { buildCommand = "${fakeNpm.absolutePath} run build" }
+            }
             """.trimIndent(),
         )
 
-        val result = runGradle(projectDir, KremaTaskNames.BUNDLE, expectFailure = true)
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_PROD, fakeNpm = fakeNpm, expectFailure = true)
 
         assertTrue(
             result.output.contains("nope.toml"),
@@ -238,7 +243,7 @@ class KremaPluginTest {
         val result = runGradle(projectDir, KremaTaskNames.SIGNER_GENERATE)
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.SIGNER_GENERATE}")?.outcome, result.output)
-        val key = projectDir.toPath().resolve("build/krema/keys/krema.key")
+        val key = projectDir.toPath().resolve("build/kerma/keys/krema.key")
         assertTrue(key.toFile().isFile, "kremaSignerGenerate 没落私钥")
         assertTrue(
             Files.readString(key).startsWith("-----BEGIN PRIVATE KEY-----"),
@@ -247,26 +252,63 @@ class KremaPluginTest {
     }
 
     @Test
-    fun bundleRunsRealOrchestrationPath(
+    fun bundleProdWritesToProdOutputDir(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        Files.writeString(
-            projectDir.toPath().resolve("build.gradle.kts"),
-            """plugins { id("top.birthcat.kremaf.ext") }""",
-        )
+        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/kerma/dist\necho hi > build/kerma/dist/index.html")
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
         writeToml(projectDir)
 
-        val result = runGradle(projectDir, KremaTaskNames.BUNDLE)
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_PROD, fakeNpm = fakeNpm)
 
-        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE}")?.outcome, result.output)
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome, result.output)
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/krema")
+                .resolve("build/kerma/prod")
                 .toFile()
                 .exists(),
-            "kremaBundle 没落产物目录",
+            "kremaBundleProd 没落 prod 产物目录",
+        )
+    }
+
+    @Test
+    fun bundleDevAndProdUseSeparateOutputDirs(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/kerma/dist\necho hi > build/kerma/dist/index.html")
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
+        writeToml(projectDir)
+
+        val result =
+            runGradleWithFakeNpm(
+                projectDir,
+                KremaTaskNames.BUNDLE_DEV,
+                KremaTaskNames.BUNDLE_PROD,
+                fakeNpm = fakeNpm,
+            )
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_DEV}")?.outcome, result.output)
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome, result.output)
+        assertTrue(
+            projectDir
+                .toPath()
+                .resolve("build/kerma/dev")
+                .toFile()
+                .exists(),
+            "dev 档没落 build/kerma/dev",
+        )
+        assertTrue(
+            projectDir
+                .toPath()
+                .resolve("build/kerma/prod")
+                .toFile()
+                .exists(),
+            "prod 档没落 build/kerma/prod",
         )
     }
 

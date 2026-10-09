@@ -159,6 +159,66 @@ class PlatformBundler(
         Categories=Utility;
         """.trimIndent()
 
+    /**
+     * bundle 落盘路径。run task 要启动它、且 bundle task 与 run task 都得就同一个路径达成一致，
+     * 所以单独抽出来而不是各自拼字符串。dev 档 macOS 出 `<app>-dev.app`。
+     */
+    fun bundlePath(
+        settings: BundleSettings,
+        dev: Boolean,
+    ): Path {
+        val out = settings.outputDir
+        return when (platform) {
+            Platform.DARWIN -> out.resolve("${settings.appName}${if (dev) "-dev" else ""}.app")
+            Platform.WINDOWS -> out.resolve("${settings.appName}.bat")
+            Platform.LINUX -> out.resolve("${settings.appName}.AppDir")
+            Platform.UNKNOWN -> throw UnsupportedOperationException("无法为 '$target' 选择 bundler")
+        }
+    }
+
+    /**
+     * 应用 classpath（`java \*` 那一类）在 bundle 内的落点。
+     * dev 档 macOS 按启动器里的 `../../../.krema/dev` 落到 `.app` 同级的 `.krema/dev/Java`，其余平台随打包形态。
+     */
+    fun javaTargetDir(
+        settings: BundleSettings,
+        dev: Boolean,
+    ): Path {
+        val out = settings.outputDir
+        return when (platform) {
+            Platform.DARWIN -> {
+                if (dev) {
+                    out.resolve(".krema/dev/Java")
+                } else {
+                    out.resolve("${settings.appName}.app/Contents/Resources/Java")
+                }
+            }
+
+            Platform.WINDOWS -> {
+                out.resolve("java")
+            }
+
+            Platform.LINUX -> {
+                out.resolve("${settings.appName}.AppDir/usr/share/${settings.appName}/java")
+            }
+
+            Platform.UNKNOWN -> {
+                throw UnsupportedOperationException("无法为 '$target' 选择 bundler")
+            }
+        }
+    }
+
+    /** prod 档前端 `dist` 在 bundle 内的落点（dev 档走 devUrl，不打包 dist）。 */
+    fun distTargetDir(settings: BundleSettings): Path {
+        val out = settings.outputDir
+        return when (platform) {
+            Platform.DARWIN -> out.resolve("${settings.appName}.app/Contents/Resources/dist")
+            Platform.WINDOWS -> out.resolve("dist")
+            Platform.LINUX -> out.resolve("${settings.appName}.AppDir/usr/share/${settings.appName}/dist")
+            Platform.UNKNOWN -> throw UnsupportedOperationException("无法为 '$target' 选择 bundler")
+        }
+    }
+
     private fun outputDir(settings: BundleSettings): Path = Files.createDirectories(settings.outputDir)
 }
 

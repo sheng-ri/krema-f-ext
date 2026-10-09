@@ -6,6 +6,7 @@ package top.birthcat.kremaf.ext.gradle
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 
 /**
  * 落盘那几件事的唯一实现。
@@ -25,5 +26,33 @@ object FileOps {
 
     fun markExecutable(path: Path) {
         path.toFile().setExecutable(true, false)
+    }
+
+    /**
+     * 把 `src` 摊进 `dest`：文件直接拷进 `dest`，目录则把其内容拷进 `dest`。
+     * 用来把 classpath 与 dist 收进 bundle 内的目标目录，目录同名不冲突。
+     */
+    fun copyTree(
+        src: Path,
+        dest: Path,
+    ) {
+        if (Files.isDirectory(src)) {
+            Files.createDirectories(dest)
+            Files.walk(src).use { stream ->
+                for (from in stream) {
+                    if (from == src) continue
+                    val to = dest.resolve(src.relativize(from))
+                    if (Files.isDirectory(from)) {
+                        Files.createDirectories(to)
+                    } else {
+                        Files.createDirectories(to.parent)
+                        Files.copy(from, to, REPLACE_EXISTING)
+                    }
+                }
+            }
+        } else {
+            Files.createDirectories(dest)
+            Files.copy(src, dest.resolve(src.fileName), REPLACE_EXISTING)
+        }
     }
 }

@@ -45,7 +45,7 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val frontendInputs: ConfigurableFileCollection
 
-    /** 前端构建产物目录，约定为 `outputDir/dist`（即 `build/krema/dist`）。 */
+    /** 前端构建产物目录，约定为 `outputDir/dist`（即 `build/kerma/dist`）。 */
     @get:OutputDirectory
     abstract val distDir: DirectoryProperty
 
