@@ -47,7 +47,6 @@ class KremaConfigLoader {
     private fun fromBuild(toml: Toml?): Build =
         Build(
             outDir = toml?.getString("out_dir", "dist") ?: "dist",
-            javaSourceDir = toml?.getString("java_source_dir", "src-java") ?: "src-java",
             mainClass = toml?.getString("main_class"),
         )
 

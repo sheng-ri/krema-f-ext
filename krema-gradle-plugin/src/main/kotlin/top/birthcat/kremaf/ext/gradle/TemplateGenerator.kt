@@ -27,7 +27,8 @@ class TemplateGenerator {
         settings: InitSettings,
     ): Path {
         val packagePath = settings.javaPackage.replace('.', '/')
-        FileOps.writeText(dir.resolve("src-java/$packagePath/Main.java"), mainClass(settings))
+        // 主类落在 Gradle 认得的标准主 source set，不造 src-java 这类约定目录。
+        FileOps.writeText(dir.resolve("src/main/java/$packagePath/Main.java"), mainClass(settings))
         FileOps.writeText(dir.resolve("krema.toml"), kremaToml(settings))
         FileOps.writeText(dir.resolve(".gitignore"), GITIGNORE)
         return dir
@@ -59,7 +60,6 @@ class TemplateGenerator {
         |frontend_dev_command = "npm run dev"
         |frontend_dev_url = "http://localhost:5173"
         |out_dir = "dist"
-        |java_source_dir = "src-java"
         |main_class = "${settings.javaPackage}.Main"
         |
         """.trimMargin()

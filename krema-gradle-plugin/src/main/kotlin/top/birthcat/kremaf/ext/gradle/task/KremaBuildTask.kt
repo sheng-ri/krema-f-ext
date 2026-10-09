@@ -11,13 +11,14 @@ import top.birthcat.kremaf.ext.gradle.KremaProjectTask
 /**
  * 产出两档共用的构建结果。
  *
- * 编译交回 Gradle 的 `compileJava` 由 #53 接上，前端 `dist` 成为声明式输出由 #54 接上。
+ * 编译交回 Gradle：本 task 只等 `classes`（由 Gradle 的 compileJava / processResources 产出），
+ * 不再自己开 javac。前端 `dist` 成为声明式输出由 #54 接上。
  */
-@DisableCachingByDefault(because = "产物目录的输入输出待 #53 / #54 声明")
+@DisableCachingByDefault(because = "产物目录的输入输出待 #54 / #55 声明")
 abstract class KremaBuildTask : KremaProjectTask() {
     @TaskAction
     fun build() {
-        val app = config().packageName
-        logger.warn("kremaBuild：$app 的编译交回 Gradle 见 #53，前端 dist 见 #54")
+        // 仅占位：编译产物来自 Gradle 的 `classes`，打包目录由本 task 持有供后续档位 task 写入。
+        outputDir.get().asFile.mkdirs()
     }
 }
