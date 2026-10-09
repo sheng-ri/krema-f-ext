@@ -11,6 +11,7 @@
 - 注释只写在 public API 上：对外库暴露的 API、模块之间的交互 API。内部实现省略注释。
 - 不用注释复述代码。注释解释「为什么」，不解释「是什么」。
 - 提交前 `./gradlew spotlessCheck` 必须干净。
+- 测试方法名必须 ≤30 字符；每个 `@Test` 方法必须加 `@DisplayName` 标注中文名。
 
 ## 外部 skill
 
