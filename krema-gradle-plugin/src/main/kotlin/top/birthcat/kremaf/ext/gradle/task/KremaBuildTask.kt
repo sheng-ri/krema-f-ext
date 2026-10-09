@@ -8,15 +8,16 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.KremaProjectTask
 
-/** 编译 Java 源码并跑一次前端生产构建。 */
-@DisableCachingByDefault(because = "调用 javac 与 npm，产物含时间戳，跨机器不可复现")
+/**
+ * 产出两档共用的构建结果。
+ *
+ * 编译交回 Gradle 的 `compileJava` 由 #53 接上，前端 `dist` 成为声明式输出由 #54 接上。
+ */
+@DisableCachingByDefault(because = "产物目录的输入输出待 #53 / #54 声明")
 abstract class KremaBuildTask : KremaProjectTask() {
     @TaskAction
     fun build() {
-        val project = kremaProject()
-        val ports = ports()
-        val classpath = ports.classpath(project)
-        ports.frontend().build(project, ports.env(project))
-        ports.javaCompiler(outputDir.get().asFile.toPath()).compile(project, classpath)
+        val app = config().packageName
+        logger.warn("kremaBuild：$app 的编译交回 Gradle 见 #53，前端 dist 见 #54")
     }
 }

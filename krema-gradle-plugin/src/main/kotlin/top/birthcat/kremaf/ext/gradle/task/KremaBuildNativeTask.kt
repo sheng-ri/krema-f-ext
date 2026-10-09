@@ -9,17 +9,15 @@ import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.KremaProjectTask
 
 /**
- * 在 [KremaBuildTask] 之上打 native-image。
+ * native-image。
  *
- * 本单只落 task 骨架：native-image 的命令拼装与工具链定位留给 #26（`Blocked by: #25`）。
+ * 真实工具链由上游票 #26 跟进；按 spec 它是 prod 档上的一个开关而不是独立 task 家族，见 #55。
  */
 @DisableCachingByDefault(because = "native-image 耗时且依赖本机工具链，见 #26")
 abstract class KremaBuildNativeTask : KremaProjectTask() {
     @TaskAction
     fun buildNative() {
-        val project = kremaProject()
-        val ports = ports()
-        ports.javaCompiler(outputDir.get().asFile.toPath()).compile(project, ports.classpath(project))
-        logger.warn("kremaBuildNative：native-image 工具链接通见 #26，本轮只产出常规编译结果")
+        val app = config().packageName
+        logger.warn("kremaBuildNative：$app 的 native-image 工具链接通见 #26，prod 档开关见 #55")
     }
 }

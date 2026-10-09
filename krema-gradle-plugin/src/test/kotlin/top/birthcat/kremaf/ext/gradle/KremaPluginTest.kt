@@ -91,6 +91,25 @@ class KremaPluginTest {
     }
 
     @Test
+    fun kremaInitWritesNoConfigKeyWithoutConsumer(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            """plugins { id("top.birthcat.kremaf.ext") }""",
+        )
+
+        val result = runGradle(projectDir, KremaTaskNames.INIT)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.INIT}")?.outcome, result.output)
+        val toml = Files.readString(projectDir.toPath().resolve("krema.toml"))
+        listOf("[window]", "description", "assets_path", "updater", "permissions").forEach { key ->
+            assertTrue(!toml.contains(key), "kremaInit 不该写没有消费者的键 $key：\n$toml")
+        }
+    }
+
+    @Test
     fun buildFailsLoudlyWithoutToml(
         @TempDir projectDir: File,
     ) {
