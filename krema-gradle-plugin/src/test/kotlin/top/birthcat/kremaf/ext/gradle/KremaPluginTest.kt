@@ -8,6 +8,7 @@ import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -15,7 +16,8 @@ import java.nio.file.Files
 
 class KremaPluginTest {
     @Test
-    fun appliesPluginAndRegistersExtension(
+    @DisplayName("插件应用后注册 krema 扩展")
+    fun pluginRegistersExtension(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -40,7 +42,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun declaresAllEightTasksInKremaGroup(
+    @DisplayName("krema 分组声明八张 task")
+    fun declaresEightKremaTasks(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -57,7 +60,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun kremaInitGeneratesSkeletonWithoutExistingToml(
+    @DisplayName("kremaInit 在缺 toml 时生成骨架")
+    fun initCreatesSkeletonNoToml(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -91,7 +95,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun kremaInitWritesNoConfigKeyWithoutConsumer(
+    @DisplayName("kremaInit 不写无消费者的键")
+    fun initOmitsUnusedKeys(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -110,7 +115,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun defaultConfigFileAbsentDoesNotFail(
+    @DisplayName("默认配置缺失不报错")
+    fun defaultConfigAbsentOk(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -141,7 +147,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun frontendDistIsUpToDateOnSecondRun(
+    @DisplayName("二次构建前端 dist 命中 UP-TO-DATE")
+    fun frontendDistUpToDate(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -176,7 +183,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun frontendBuildFailureSurfacesCommandOutput(
+    @DisplayName("前端构建失败透出命令输出")
+    fun frontendFailureShowsOutput(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -204,6 +212,7 @@ class KremaPluginTest {
     }
 
     @Test
+    @DisplayName("显式指定缺失配置硬失败")
     fun explicitConfigFileMissingFails(
         @TempDir projectDir: File,
     ) {
@@ -230,7 +239,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun signerGenerateProducesEd25519KeyPair(
+    @DisplayName("kremaSignerGenerate 生成 Ed25519 密钥对")
+    fun signerGenerateKeyPair(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -252,7 +262,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun bundleProdWritesToProdOutputDir(
+    @DisplayName("kremaBundleProd 落到 prod 输出目录")
+    fun bundleProdOutputDir(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -275,7 +286,8 @@ class KremaPluginTest {
     }
 
     @Test
-    fun bundleDevAndProdUseSeparateOutputDirs(
+    @DisplayName("dev 与 prod 档产物目录分离")
+    fun bundleDevProdSeparateDirs(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
