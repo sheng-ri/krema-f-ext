@@ -22,10 +22,9 @@ data class KremaConfig(
     val deepLinkSchemes: List<String> = emptyList(),
 )
 
-/** 构建约定：产物目录、源码目录、主类。 */
+/** 构建约定：产物目录、主类。 */
 data class Build(
     val outDir: String = "dist",
-    val javaSourceDir: String = "src-java",
     val mainClass: String? = null,
 )
 

@@ -110,7 +110,7 @@ class KremaPluginTest {
     }
 
     @Test
-    fun buildFailsLoudlyWithoutToml(
+    fun defaultConfigFileAbsentDoesNotFail(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -119,11 +119,33 @@ class KremaPluginTest {
             """plugins { id("top.birthcat.kremaf.ext") }""",
         )
 
-        val result = runGradle(projectDir, KremaTaskNames.BUILD, expectFailure = true)
+        val result = runGradle(projectDir, KremaTaskNames.BUILD)
+
+        assertEquals(
+            TaskOutcome.SUCCESS,
+            result.task(":${KremaTaskNames.BUILD}")?.outcome,
+            "默认路径下没有 krema.toml 不应报错：\n${result.output}",
+        )
+    }
+
+    @Test
+    fun explicitConfigFileMissingFails(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            """
+            plugins { id("top.birthcat.kremaf.ext") }
+            krema { configFile = layout.projectDirectory.file("nope.toml") }
+            """.trimIndent(),
+        )
+
+        val result = runGradle(projectDir, KremaTaskNames.BUNDLE, expectFailure = true)
 
         assertTrue(
-            result.output.contains("找不到 krema.toml"),
-            "krema.toml 缺失时应当硬报错：\n${result.output}",
+            result.output.contains("nope.toml"),
+            "显式指定的 krema.toml 不存在应当指到那个路径：\n${result.output}",
         )
     }
 

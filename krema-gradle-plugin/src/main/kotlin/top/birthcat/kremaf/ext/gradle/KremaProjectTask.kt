@@ -5,13 +5,19 @@
 package top.birthcat.kremaf.ext.gradle
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.Project
+import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileCollection
+import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.SourceSet
 import org.gradle.work.DisableCachingByDefault
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -46,14 +52,35 @@ abstract class KremaProjectTask : DefaultTask() {
     @get:Optional
     abstract val mainClass: Property<String>
 
-    /** `krema.toml` 的解析结果，路径不存在时硬失败。 */
+    /**
+     * 用户是否在 `krema { }` 里显式给了 `configFile`。
+     *
+     * 区分「显式指定」与「走默认路径」：只有显式指定的文件不存在才硬报错，默认路径缺失只是无值。
+     */
+    @get:Input
+    abstract val configFileSetExplicitly: Property<Boolean>
+
+    /**
+     * 解析出来的 `krema.toml` 当前是否存在。
+     *
+     * 路径字符串本身不变，删/建文件不会让 task 重新执行，所以用这个布尔值作为 input 参与 up-to-date。
+     */
+    @get:Input
+    abstract val configFilePresent: Property<Boolean>
+
+    /** `krema.toml` 的解析结果。默认路径缺失即无值、不报错；显式指定却缺失才硬失败指到路径。 */
     protected fun config(): KremaConfig {
         val toml = Path.of(configFilePath.get())
-        if (!Files.isRegularFile(toml)) {
-            error("找不到 krema.toml（应为 $toml）—— 先跑 kremaInit，或把 krema.configFile 指对")
-        }
-        val loaded = KremaConfigLoader().loadOrDefault(toml)
-        return loaded.copy(build = loaded.build.copy(mainClass = mainClass.orNull ?: loaded.build.mainClass))
+        val loaded =
+            if (configFilePresent.get()) {
+                KremaConfigLoader().loadOrDefault(toml)
+            } else if (configFileSetExplicitly.get()) {
+                error("krema.configFile 指向的 krema.toml 不存在：$toml")
+            } else {
+                KremaConfig()
+            }
+        val explicitMain = mainClass.orNull
+        return loaded.copy(build = loaded.build.copy(mainClass = explicitMain ?: loaded.build.mainClass))
     }
 
     /** 打包输入，`krema { }` 块的覆盖值已压过 toml。 */
@@ -70,4 +97,26 @@ abstract class KremaProjectTask : DefaultTask() {
             deepLinkSchemes = config.deepLinkSchemes,
         )
     }
+}
+
+/** 主 source set 的编译产物与运行期 classpath，供 #55 把应用进程打进 bundle。 */
+data class KremaApplicationClasspath(
+    val classesDirs: FileCollection,
+    val resourcesDir: File?,
+    val runtimeClasspath: Configuration,
+)
+
+/**
+ * 应用进程运行所需的 classpath 来源。
+ *
+ * 插件不假设编译方言：Java 与 Kotlin 的产出都落在 `sourceSets["main"]` 的输出上，
+ * 因此直接取 Gradle 标准位置，不认插件自造的源码目录。
+ */
+fun Project.kremaApplicationClasspath(): KremaApplicationClasspath {
+    val main = extensions.getByType(JavaPluginExtension::class.java).sourceSets.getByName("main")
+    return KremaApplicationClasspath(
+        classesDirs = main.output.classesDirs,
+        resourcesDir = main.output.resourcesDir,
+        runtimeClasspath = configurations.getByName("runtimeClasspath"),
+    )
 }
