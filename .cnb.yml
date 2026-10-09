@@ -33,6 +33,13 @@ $:
       stages:
         - *verify
 
+  vscode:
+    - docker:
+        image: docker.cnb.cool/birthcat/dev-kotlin-jvm-25:latest
+      services:
+        - vscode
+        - docker
+
   pull_request:
     verify:
       name: PR 门禁
