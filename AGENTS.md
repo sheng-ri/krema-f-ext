@@ -27,3 +27,13 @@ npx skills add \
 ## 提交规范
 
 - pr最终合并的commit遵循`[chore,ref,feat,fix]:` 开头, 末尾引用issue结尾。例: `feat: 一个功能 (#1)`
+
+## Agent skills
+
+### Issue tracker
+
+- Issue 与 spec 都放在本仓库的 CNB Issues，一律用 `cnb` CLI 操作（不是 `gh`）。见 `docs/agents/issue-tracker.md`。
+
+### Domain docs
+
+- single-context：根级 `GLOSSARY.md`，不用 ADR。见 `docs/agents/domain.md`。

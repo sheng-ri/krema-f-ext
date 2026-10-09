@@ -39,6 +39,9 @@ $:
       services:
         - vscode
         - docker
+      # 每次打开开发环境自动执行，安装 skills。
+      env:
+        CNB_WELCOME_CMD: bash /workspace/install-skills.sh
 
   pull_request:
     verify:
