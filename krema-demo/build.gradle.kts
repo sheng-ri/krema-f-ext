@@ -1,3 +1,5 @@
+import top.birthcat.kremaf.ext.gradle.BundleFormat
+
 plugins {
     id("top.birthcat.kremaf.ext")
 }
@@ -36,12 +38,10 @@ krema {
     }
 
     bundling {
-        // 写全平台想要的格式，插件构建时自动只取宿主平台的子集。
-        platformFormats =
-            setOf(
-                top.birthcat.kremaf.ext.gradle.BundleFormat.DMG,
-                top.birthcat.kremaf.ext.gradle.BundleFormat.MSI,
-                top.birthcat.kremaf.ext.gradle.BundleFormat.APP_IMAGE,
-            )
+        // 三个平台各写各的，构建时插件只跑与宿主平台对上的那个属性。
+        // 所以在 Windows 上构建就只出 exe 与 msi，在 macOS 上只出 app/dmg/pkg —— 换机器不用改这份脚本。
+        macosFormats = setOf(BundleFormat.APP, BundleFormat.DMG, BundleFormat.PKG)
+        windowsFormats = setOf(BundleFormat.EXE, BundleFormat.MSI)
+        linuxFormats = setOf(BundleFormat.APP_IMAGE, BundleFormat.DEB, BundleFormat.RPM)
     }
 }

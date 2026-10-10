@@ -30,8 +30,13 @@ class KremaPluginTest {
         /** 报告宿主平台与筛后平台包的 task 名。 */
         const val REPORT_TASK = "reportPlatformFormats"
 
-        /** 三平台的格式各写一个，用于验证筛选只留宿主平台的子集。 */
-        const val ALL_FORMATS = "BundleFormat.DMG, BundleFormat.MSI, BundleFormat.APP_IMAGE, BundleFormat.DEB"
+        /** 三平台的格式各写一个，用于验证只跑宿主平台那个属性里的格式。 */
+        const val ALL_FORMATS =
+            """
+            macosFormats = setOf(BundleFormat.DMG)
+            windowsFormats = setOf(BundleFormat.MSI)
+            linuxFormats = setOf(BundleFormat.APP_IMAGE, BundleFormat.DEB)
+            """
 
         /**
          * 假前端构建产物：只落一个 index.html，够断言资产路径用。
@@ -733,7 +738,7 @@ class KremaPluginTest {
     }
 
     @Test
-    @DisplayName("platformFormats 为空不出平台包也不报错")
+    @DisplayName("平台包格式不配置就不出包也不报错")
     fun emptyFormatsSkipBundles(
         @TempDir projectDir: File,
     ) {
@@ -766,7 +771,7 @@ class KremaPluginTest {
                 """
                 krema {
                     bundling {
-                        platformFormats = setOf($formats)
+                        $formats
                     }
                 }
                 """.trimIndent()

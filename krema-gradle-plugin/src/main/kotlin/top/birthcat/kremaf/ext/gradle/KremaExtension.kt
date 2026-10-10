@@ -62,14 +62,33 @@ abstract class KremaFrontendExtension {
 /**
  * `krema.bundling { }`。
  *
- * 只管平台包（便携包不给配）：用户写一份跨平台的 `platformFormats`，构建时按宿主平台取子集，
- * 所以同一份构建脚本在哪个平台跑都成立，不需要「这台机器跳过哪几个格式」的开关。
+ * 只管平台包（便携包不给配）。三个平台各一个属性，各自的构建档位与宿主平台对不上就整份忽略 ——
+ * 于是换机器不用改构建脚本，也不需要「这台机器跳过哪几个格式」的开关。
+ *
+ * 分成三个属性而不是一份混合列表，是为了让读脚本的人一眼看出哪个格式归哪个平台：
+ * 混在一个 `setOf` 里时，`DMG` 和 `MSI` 挨在一起，分不出谁是谁。
  */
 abstract class KremaBundlingExtension {
-    /** 要出的平台包格式；写全平台也可，构建时只取宿主平台的子集。默认空集合 —— 空即本平台不出平台包。 */
-    abstract val platformFormats: SetProperty<BundleFormat>
+    /** macOS 要出的平台包格式（`.app` / `.dmg` / `.pkg`）。默认空集合 —— 空即该平台不出平台包。 */
+    abstract val macosFormats: SetProperty<BundleFormat>
 
-    /** 宿主平台上实际要出的平台包格式；宿主平台之外的格式在这里就被丢掉，不报错也不跳过 task。 */
-    fun formatsForHost(platform: Platform = PlatformDetector.detect()): List<BundleFormat> =
-        platformFormats.get().filter { it.platform == platform }
+    /** Windows 要出的平台包格式（`.exe` / `.msi`）。默认空集合。 */
+    abstract val windowsFormats: SetProperty<BundleFormat>
+
+    /** Linux 要出的平台包格式（`.AppImage` / `.deb` / `.rpm`）。默认空集合。 */
+    abstract val linuxFormats: SetProperty<BundleFormat>
+
+    /**
+     * 宿主平台上实际要出的平台包格式；其余两个平台的格式在这里就被丢掉，不报错也不跳过 task。
+     *
+     * 按属性取，不按枚举自身的 [BundleFormat.platform] 过滤：属性名已经声明了归属，
+     * 再过一遍会让「把 `DMG` 写进 `windowsFormats`」这种笔误被静默吞掉而不是被发现。
+     */
+    fun formatsForHost(platform: Platform = PlatformDetector.detect()): Set<BundleFormat> =
+        when (platform) {
+            Platform.DARWIN -> macosFormats.get()
+            Platform.WINDOWS -> windowsFormats.get()
+            Platform.LINUX -> linuxFormats.get()
+            Platform.UNKNOWN -> emptySet()
+        }
 }
