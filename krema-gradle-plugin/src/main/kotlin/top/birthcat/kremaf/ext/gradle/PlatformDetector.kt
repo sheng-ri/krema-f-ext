@@ -69,5 +69,28 @@ enum class Platform {
     }
 }
 
+/**
+ * bundle 的分发形态：分发形态 × 构建档位 = 四张打包 task，见 [top.birthcat.kremaf.ext.gradle.BundleForm]。
+ */
+enum class BundleForm(
+    /** 进产物路径的稳定标识，与枚举名解耦。 */
+    val id: String,
+    /** 该形态的产物是否还要再打一份便携包 zip。 */
+    val zipped: Boolean,
+) {
+    /** 便携包：不分平台的 app-image 目录 + zip，解压即用。 */
+    DIST("dist", true),
+
+    /** 平台包：本平台原生的可安装件，具体格式由 [BundleFormat] 选。 */
+    PLATFORM("platform", false),
+}
+
 /** 当前平台的可执行文件后缀，Windows 上为 `.exe`。 */
 internal fun executableSuffix(): String = if (File.separatorChar == '\\') ".exe" else ""
+
+/**
+ * jpackage app-image 的目录名。
+ *
+ * macOS 上 jpackage 按惯例给 app-image 加 `.app` 后缀（它就是应用身份本身），其余平台与 `--name` 同名。
+ */
+fun Platform.appImageDirName(appName: String): String = if (this == Platform.DARWIN) "$appName.app" else appName
