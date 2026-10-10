@@ -47,8 +47,8 @@ class KremaPluginTest {
     }
 
     @Test
-    @DisplayName("krema 分组声明八张 task")
-    fun declaresEightKremaTasks(
+    @DisplayName("krema 分组声明九张 task")
+    fun declaresNineKremaTasks(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)

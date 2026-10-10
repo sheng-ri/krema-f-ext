@@ -16,7 +16,7 @@ object KremaTaskNames {
     const val SIGNER_GENERATE = "kremaSignerGenerate"
     const val SIGNER_SIGN = "kremaSignerSign"
 
-    /** 内部支撑 task：跑前端生产构建，不是用户面向的 task，不进 `krema` 分组也不进 `ALL`。 */
+    /** 用户面向的前端构建 task：跑前端生产构建、产可缓存的 `dist`；被 `kremaBuild` 依赖，也单独可跑。 */
     const val FRONTEND_BUILD = "kremaFrontendBuild"
 
     /** 全部 task 名，声明顺序即 `gradlew tasks` 里的出现顺序。 */
@@ -24,6 +24,7 @@ object KremaTaskNames {
         listOf(
             INIT,
             BUILD,
+            FRONTEND_BUILD,
             BUNDLE_DEV,
             BUNDLE_PROD,
             BUNDLE_RUN_DEV,

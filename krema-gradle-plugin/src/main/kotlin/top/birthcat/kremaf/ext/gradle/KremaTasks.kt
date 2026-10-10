@@ -28,8 +28,8 @@ internal fun Project.registerKremaTasks() {
     }
 
     tasks.register(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java) { task ->
-        // 内部支撑 task：不进 krema 分组，也不出现在 KremaTaskNames.ALL（用户面向的 8 张）。
-        task.group = null
+        // 用户面向的前端构建 task：进 krema 分组，也出现在 KremaTaskNames.ALL（与 kremaBuild 一并构成公开 family）。
+        task.group = KremaTaskNames.GROUP
         task.description = "跑前端生产构建（npm 命令），产物为 build/krema/dist 并声明成可缓存输出"
         task.configureProject(ext)
         task.buildCommand.convention(ext.frontend.buildCommand)
