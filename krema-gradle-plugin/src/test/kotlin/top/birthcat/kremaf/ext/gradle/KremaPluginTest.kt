@@ -6,13 +6,18 @@ package top.birthcat.kremaf.ext.gradle
 
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
+import org.gradle.tooling.CancellationTokenSource
+import org.gradle.tooling.GradleConnector
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.io.FileOutputStream
+import java.io.FileWriter
 import java.nio.file.Files
+import java.util.Properties
 
 class KremaPluginTest {
     @Test
@@ -324,6 +329,118 @@ class KremaPluginTest {
         )
     }
 
+    @Test
+    @DisplayName("kremaBundleProd 二次执行命中 UP-TO-DATE")
+    fun bundleProdUpToDate(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
+        writeToml(projectDir)
+
+        val first = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_PROD, fakeNpm = fakeNpm)
+        assertEquals(TaskOutcome.SUCCESS, first.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome, first.output)
+
+        val second = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_PROD, fakeNpm = fakeNpm)
+        assertEquals(
+            TaskOutcome.UP_TO_DATE,
+            second.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome,
+            "二次执行 kremaBundleProd 应当 UP-TO-DATE：\n${second.output}",
+        )
+    }
+
+    @Test
+    @DisplayName("run 中断后不留下孤儿进程")
+    fun runDevLeavesNoOrphan(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
+        val fakeDev = fakeDevServer(projectDir)
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle"),
+            runBuildGradle(fakeNpm.absolutePath, fakeDev.absolutePath),
+        )
+        writeToml(projectDir)
+        writeMainJava(projectDir)
+
+        // TestKit 9.8 不接受 --no-daemon，构建必跑在守护进程里，而守护进程不认 OS 信号的优雅取消，
+        // 故只能用 Tooling API 的 CancellationToken 取消——这正是对用户 Ctrl-C 的等价模拟。
+        // 插件 classpath 注入用一份复刻 GradleRunner 的 init 脚本完成。
+        val initScript = pluginClasspathInitScript(projectDir)
+        val connector =
+            GradleConnector
+                .newConnector()
+                .forProjectDirectory(projectDir)
+                .useInstallation(localGradleInstallation())
+                .useGradleUserHomeDir(gradleUserHome())
+        val connection = connector.connect()
+        val tokenSource = GradleConnector.newCancellationTokenSource()
+        val launcher =
+            connection
+                .newBuild()
+                .forTasks(KremaTaskNames.BUNDLE_RUN_DEV)
+                .withArguments("--offline", "--configuration-cache", "-I", initScript.absolutePath)
+                .withCancellationToken(tokenSource.token())
+        launcher.setStandardOutput(FileOutputStream("/tmp/krema-run.log"))
+        launcher.setStandardError(FileOutputStream("/tmp/krema-run.log"))
+        var buildFailure: Throwable? = null
+        val buildThread = Thread { runCatching { launcher.run() }.onFailure { buildFailure = it } }
+        buildThread.start()
+
+        val appUp = waitForProc("com.example.app.Main")
+        val devUp = waitForProc("devserver")
+        dumpProcs("/tmp/krema-procs.log")
+        if (!appUp) error("app 进程没起来；buildFailure=${buildFailure?.stackTraceToString()}\n见 /tmp/krema-run.log / /tmp/krema-procs.log")
+        assertTrue(devUp, "dev server 进程没起来，无法验证回收")
+        // 等价于 Ctrl-C：取消本次构建，守护进程据此打断 run task 线程、触发 cleanup 回收进程树。
+        tokenSource.cancel()
+        buildThread.join(60_000)
+
+        assertTrue(waitGone("com.example.app.Main"), "run 中断后 app 进程仍存活")
+        assertTrue(waitGone("devserver"), "run 中断后 dev server 进程仍存活")
+        connection.close()
+    }
+
+    /** 复刻 GradleRunner 的插件 classpath 注入：把被测插件 jar/classes 加进所有 project 的 buildscript classpath。 */
+    private fun pluginClasspathInitScript(projectDir: File): File {
+        val props = Properties().apply { load(File("build/pluginUnderTestMetadata/plugin-under-test-metadata.properties").inputStream()) }
+        val entries = props.getProperty("implementation-classpath").split(":")
+        val filesArg = entries.joinToString("', '", "'", "'")
+        val script =
+            """
+            initscript {
+                dependencies { classpath files($filesArg) }
+            }
+            allprojects {
+                buildscript {
+                    dependencies { classpath files($filesArg) }
+                }
+            }
+            """.trimIndent()
+        return projectDir.resolve("plugin-classpath.init.gradle").also { it.writeText(script) }
+    }
+
+    private fun gradleUserHome(): File {
+        val fromEnv = System.getenv("GRADLE_USER_HOME")
+        if (!fromEnv.isNullOrBlank()) return File(fromEnv)
+        return File(System.getProperty("user.home"), ".gradle")
+    }
+
+    /** 定位本机已解压的 Gradle 9.8.0 安装目录，避免 Tooling API 联网下载。 */
+    private fun localGradleInstallation(): File {
+        val base = gradleUserHome().resolve("wrapper/dists/gradle-9.8.0-bin")
+        val install =
+            base.listFiles().orEmpty().firstNotNullOfOrNull { candidate ->
+                File(candidate, "gradle-9.8.0").takeIf { it.isDirectory }
+            } ?: File("/opt/gradle")
+        require(install.isDirectory) { "找不到本地 Gradle 9.8.0 安装：$install" }
+        return install
+    }
+
     private fun writeToml(projectDir: File) {
         Files.writeString(
             projectDir.toPath().resolve("krema.toml"),
@@ -407,4 +524,96 @@ class KremaPluginTest {
             }
         }
         """.trimIndent()
+
+    /**
+     * 写一份 `build.gradle.kts`，前端生产与 dev server 都指向假可执行文件的绝对路径。
+     *
+     * 用 `apply(plugin = ...)` 而非 `plugins { id }`：本测试绕开 GradleRunner、直接用 Tooling API 起构建，
+     * 插件 classpath 靠 init 脚本注入到 buildscript classpath，`apply` 能据此解析插件 id，而 `plugins {}` 只认插件仓库。
+     */
+    private fun runBuildGradle(
+        npmPath: String,
+        devPath: String,
+    ) = """
+        apply plugin: "top.birthcat.kremaf.ext"
+        krema {
+            mainClass = "com.example.app.Main"
+            frontend {
+                buildCommand = "$npmPath run build"
+                devCommand = "$devPath"
+            }
+        }
+        """.trimIndent()
+
+    /** 一个一直 sleep 的假 dev server，命令里带可识别的 `devserver` 字样。 */
+    private fun fakeDevServer(projectDir: File): File {
+        val dir = projectDir.toPath().resolve("fakebin").toFile()
+        dir.mkdirs()
+        val dev = dir.toPath().resolve("devserver").toFile()
+        Files.writeString(dev.toPath(), "#!/bin/sh\nsleep 3600\n")
+        dev.setExecutable(true)
+        return dev
+    }
+
+    /** 一个会一直睡、可被回收的消费者主类，给 run task 一个真实长驻进程。 */
+    private fun writeMainJava(projectDir: File) {
+        val src = projectDir.toPath().resolve("src/main/java/com/example/app").toFile()
+        src.mkdirs()
+        Files.writeString(
+            src.toPath().resolve("Main.java"),
+            """
+            package com.example.app;
+            public class Main {
+                public static void main(String[] args) throws InterruptedException {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        Thread.sleep(500);
+                    }
+                }
+            }
+            """.trimIndent(),
+        )
+    }
+
+    /** 轮询 OS 进程表，直到出现命令行含 [marker] 的进程（最多约 60s）。 */
+    private fun waitForProc(marker: String): Boolean {
+        val deadline = System.currentTimeMillis() + 60_000
+        while (System.currentTimeMillis() < deadline) {
+            if (anyProc(marker)) return true
+            Thread.sleep(200)
+        }
+        return false
+    }
+
+    /** 轮询 OS 进程表，直到命令行含 [marker] 的进程消失（最多约 15s）。 */
+    private fun waitGone(marker: String): Boolean {
+        val deadline = System.currentTimeMillis() + 15_000
+        while (System.currentTimeMillis() < deadline) {
+            if (!anyProc(marker)) return true
+            Thread.sleep(200)
+        }
+        return !anyProc(marker)
+    }
+
+    private fun anyProc(marker: String): Boolean =
+        ProcessHandle.allProcesses().anyMatch { handle ->
+            handle
+                .info()
+                .commandLine()
+                .orElse("")
+                .contains(marker)
+        }
+
+    private fun dumpProcs(path: String) {
+        val sb = StringBuilder()
+        ProcessHandle.current().descendants().toList().forEach { h ->
+            sb.appendLine("DESC: ${h.info().commandLine().orElse("")}")
+        }
+        ProcessHandle.allProcesses().forEach { h ->
+            val cl = h.info().commandLine().orElse("")
+            if (cl.contains("devserver") || cl.contains("com.example.app") || cl.contains("gradle")) {
+                sb.appendLine("ALL: $cl")
+            }
+        }
+        File(path).writeText(sb.toString())
+    }
 }

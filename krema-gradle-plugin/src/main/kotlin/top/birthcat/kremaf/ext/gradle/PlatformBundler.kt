@@ -96,7 +96,7 @@ class PlatformBundler(
         val bundleDir = outputDir(settings)
         FileOps.writeText(
             bundleDir.resolve("${settings.appName}.bat"),
-            "@echo off\r\njava --enable-native-access=ALL-UNNAMED -cp \"%~dp0java\\*\" ${settings.mainClass} %*\r\n",
+            "@echo off\r\njava --enable-native-access=ALL-UNNAMED -cp \"%~dp0java;%~dp0java\\*\" ${settings.mainClass} %*\r\n",
         )
         return bundleDir
     }
@@ -108,7 +108,7 @@ class PlatformBundler(
         FileOps.markExecutable(appDir.resolve("AppRun"))
         FileOps.writeText(
             appDir.resolve("usr/bin/${settings.appName}"),
-            "#!/bin/bash\nexec java --enable-native-access=ALL-UNNAMED -cp \"$(dirname \"\$0\")/../share/${settings.appName}/java/*\" ${settings.mainClass} \"\$@\"\n",
+            "#!/bin/bash\nexec java --enable-native-access=ALL-UNNAMED -cp \"$(dirname \"\$0\")/../share/${settings.appName}/java:$(dirname \"\$0\")/../share/${settings.appName}/java/*\" ${settings.mainClass} \"\$@\"\n",
         )
         FileOps.markExecutable(appDir.resolve("usr/bin/${settings.appName}"))
         FileOps.writeText(appDir.resolve("${settings.appName.lowercase()}.desktop"), desktopFile(settings))
@@ -144,7 +144,7 @@ class PlatformBundler(
             |#!/bin/bash
             |DIR="${'$'}(cd "${'$'}(dirname "${'$'}0")" && pwd)"
             |export KREMA_MAIN_CLASS="${settings.mainClass}"
-            |exec java --enable-native-access=ALL-UNNAMED -cp "${'$'}DIR/$resources/Java/*" "${settings.mainClass}" "${'$'}@"
+            |exec java --enable-native-access=ALL-UNNAMED -cp "${'$'}DIR/$resources/Java:${'$'}DIR/$resources/Java/*" "${settings.mainClass}" "${'$'}@"
             |
             """.trimMargin()
     }

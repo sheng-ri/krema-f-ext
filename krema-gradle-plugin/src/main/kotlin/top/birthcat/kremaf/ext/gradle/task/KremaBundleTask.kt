@@ -53,7 +53,9 @@ abstract class KremaBundleTask : KremaProjectTask() {
             bundler.createProductionBundle(settings)
         }
         val javaDir = bundler.javaTargetDir(settings, dev.get())
-        classpathFiles.files.forEach { FileOps.copyTree(it.toPath(), javaDir) }
+        // 编译产出目录在 source set 为空时不会落地，classpath 里却仍会列出来：只拷真实存在的条目，
+        // 避免对尚不存在的 classes 目录抛 NoSuchFileException。
+        classpathFiles.files.filter { it.exists() }.forEach { FileOps.copyTree(it.toPath(), javaDir) }
         if (!dev.get()) {
             distFiles.files.forEach { FileOps.copyTree(it.toPath(), bundler.distTargetDir(settings)) }
         }

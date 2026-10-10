@@ -95,8 +95,10 @@ private fun Project.registerBundle(
         )
         task.target.convention(currentTarget())
         task.dev.convention(dev)
-        // 应用 classpath 直接取 Gradle 的 runtimeClasspath（已含主 source set 产出与运行期依赖）。
-        task.classpathFiles.from(configurations.named("runtimeClasspath"))
+        // 应用 classpath 直接取主 source set 产出与运行期依赖：classesDirs 是编译产出目录，
+        // runtimeClasspath 含运行期依赖 jar 与（存在的）资源目录。
+        task.classpathFiles.from(classpath.classesDirs)
+        task.classpathFiles.from(classpath.runtimeClasspath)
         if (dev) {
             task.distFiles.setFrom(emptyList<Any>())
         } else {
