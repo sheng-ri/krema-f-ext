@@ -53,8 +53,8 @@ class KremaPluginTest {
     }
 
     @Test
-    @DisplayName("krema 分组声明九张 task")
-    fun declaresNineKremaTasks(
+    @DisplayName("krema 分组声明十张 task")
+    fun declaresKremaTasks(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -449,6 +449,62 @@ class KremaPluginTest {
         assertTrue(waitGone("devserver"), "run 中断后 dev server 进程仍存活")
         connection.close()
     }
+
+    @Test
+    @DisplayName("运行时镜像里有可执行 java 且小于全量 JDK")
+    fun runtimeImageSlimmerThanJdk(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            """plugins { id("top.birthcat.kremaf.ext") }""",
+        )
+        writeToml(projectDir)
+        writeMainJava(projectDir)
+
+        val result = runGradle(projectDir, KremaTaskNames.RUNTIME_IMAGE)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.RUNTIME_IMAGE}")?.outcome, result.output)
+        val image = projectDir.toPath().resolve("build/krema/runtime")
+        assertTrue(
+            image.resolve("bin/java").toFile().canExecute(),
+            "运行时镜像里没有可执行的 bin/java：\n${result.output}",
+        )
+        assertTrue(
+            treeSize(image.toFile()) < treeSize(File(System.getProperty("java.home"))),
+            "运行时镜像应比全量 JDK 小，否则说明 jlink 没生效：\n${result.output}",
+        )
+    }
+
+    @Test
+    @DisplayName("运行时镜像二次执行命中 UP-TO-DATE")
+    fun runtimeImageUpToDate(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            """plugins { id("top.birthcat.kremaf.ext") }""",
+        )
+        writeToml(projectDir)
+        writeMainJava(projectDir)
+
+        val first = runGradle(projectDir, KremaTaskNames.RUNTIME_IMAGE)
+
+        assertEquals(TaskOutcome.SUCCESS, first.task(":${KremaTaskNames.RUNTIME_IMAGE}")?.outcome, first.output)
+
+        val second = runGradle(projectDir, KremaTaskNames.RUNTIME_IMAGE)
+
+        assertEquals(
+            TaskOutcome.UP_TO_DATE,
+            second.task(":${KremaTaskNames.RUNTIME_IMAGE}")?.outcome,
+            "classpath 输入没变时运行时镜像应当 UP-TO-DATE：\n${second.output}",
+        )
+    }
+
+    /** 目录内所有普通文件的字节数之和，用来比运行时镜像与全量 JDK 的体积。 */
+    private fun treeSize(root: File): Long = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     /** 复刻 GradleRunner 的插件 classpath 注入：把被测插件 jar/classes 加进所有 project 的 buildscript classpath。 */
     private fun pluginClasspathInitScript(projectDir: File): File {
