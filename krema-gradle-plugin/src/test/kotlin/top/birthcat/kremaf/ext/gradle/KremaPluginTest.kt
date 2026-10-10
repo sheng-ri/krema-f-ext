@@ -24,6 +24,12 @@ class KremaPluginTest {
     private companion object {
         /** 测试 build script 里注册的那张探针 task，用来把插件解析出的资产路径打印出来。 */
         const val ASSETS_PATH_PROBE = "showAssetsPath"
+
+        /** 报告宿主平台与筛后平台包的 task 名。 */
+        const val REPORT_TASK = "reportPlatformFormats"
+
+        /** 三平台的格式各写一个，用于验证筛选只留宿主平台的子集。 */
+        const val ALL_FORMATS = "BundleFormat.DMG, BundleFormat.MSI, BundleFormat.APP_IMAGE, BundleFormat.DEB"
     }
 
     @Test
@@ -451,6 +457,62 @@ class KremaPluginTest {
     }
 
     @Test
+    @DisplayName("每个平台包格式映射到所属平台与 jpackage type")
+    fun formatsMapToPlatformAndType() {
+        val expected =
+            mapOf(
+                "app" to (Platform.DARWIN to "app-image"),
+                "dmg" to (Platform.DARWIN to "dmg"),
+                "pkg" to (Platform.DARWIN to "pkg"),
+                "exe" to (Platform.WINDOWS to "exe"),
+                "msi" to (Platform.WINDOWS to "msi"),
+                "appimage" to (Platform.LINUX to null),
+                "deb" to (Platform.LINUX to "deb"),
+                "rpm" to (Platform.LINUX to "rpm"),
+            )
+
+        assertEquals(
+            expected.keys.sorted(),
+            BundleFormat.entries.map { it.id }.sorted(),
+            "平台包格式清单与 GLOSSARY 的「平台包」词条不一致",
+        )
+        BundleFormat.entries.forEach {
+            assertEquals(expected.getValue(it.id), it.platform to it.jpackageType, "格式 $it 的平台或 jpackage type 不对")
+        }
+    }
+
+    @Test
+    @DisplayName("bundling 只取宿主平台的平台包子集")
+    fun bundlingKeepsOnlyHostFormats(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), bundlingGradle())
+        val expected =
+            mapOf(
+                Platform.DARWIN to listOf("dmg:DARWIN"),
+                Platform.WINDOWS to listOf("msi:WINDOWS"),
+                Platform.LINUX to listOf("appimage:LINUX", "deb:LINUX"),
+            )
+
+        val result = runGradle(projectDir, REPORT_TASK)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":$REPORT_TASK")?.outcome, result.output)
+        val picked =
+            result.output
+                .substringAfter("formats=", "")
+                .substringBefore('\n')
+                .trim()
+                .split(",")
+                .filter { it.isNotEmpty() }
+        assertEquals(
+            expected[PlatformDetector.detect()].orEmpty(),
+            picked,
+            "跨平台写的格式列表应当只留下宿主平台的子集：\n${result.output}",
+        )
+    }
+
+    @Test
     @DisplayName("运行时镜像里有可执行 java 且小于全量 JDK")
     fun runtimeImageSlimmerThanJdk(
         @TempDir projectDir: File,
@@ -475,6 +537,64 @@ class KremaPluginTest {
             treeSize(image.toFile()) < treeSize(File(System.getProperty("java.home"))),
             "运行时镜像应比全量 JDK 小，否则说明 jlink 没生效：\n${result.output}",
         )
+    }
+
+    @Test
+    @DisplayName("platformFormats 为空不出平台包也不报错")
+    fun emptyFormatsSkipBundles(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), bundlingGradle(""))
+
+        val result = runGradle(projectDir, REPORT_TASK)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":$REPORT_TASK")?.outcome, result.output)
+        val picked =
+            result.output
+                .substringAfter("formats=", "")
+                .substringBefore('\n')
+                .trim()
+        assertEquals("", picked, "默认空集合时不该出任何平台包：\n${result.output}")
+    }
+
+    /**
+     * 写一份带报告 task 的 `build.gradle.kts`。
+     *
+     * [formats] 为空串时不写 `bundling { }` 块，用的是默认空集合 —— 空集合下 `.get()` 不炸
+     * 正是这条用例要守的。
+     */
+    private fun bundlingGradle(formats: String = ALL_FORMATS): String {
+        val name = REPORT_TASK
+        val bundling =
+            if (formats.isEmpty()) {
+                ""
+            } else {
+                """
+                krema {
+                    bundling {
+                        platformFormats = setOf($formats)
+                    }
+                }
+                """.trimIndent()
+            }
+        return """
+            import top.birthcat.kremaf.ext.gradle.BundleFormat
+            import top.birthcat.kremaf.ext.gradle.PlatformDetector
+
+            plugins { id("top.birthcat.kremaf.ext") }
+
+            $bundling
+
+            tasks.register("$name") {
+                val host = PlatformDetector.detect().name
+                val picked = krema.bundling.formatsForHost().map { it.id + ":" + it.platform.name }
+                doLast {
+                    println("host=" + host)
+                    println("formats=" + picked.joinToString(","))
+                }
+            }
+            """.trimIndent()
     }
 
     @Test
