@@ -10,6 +10,7 @@ import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
@@ -46,6 +47,15 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
     @get:Internal
     abstract val jdkBinDir: Property<String>
 
+    /**
+     * jdeps 的 `--multi-release` 版本，取编译用的 JDK 主版本号。
+     *
+     * 跟 toolchain 走而不是写死：jlink 出的运行时就是 toolchain 那个版本，按别的版本号推导模块
+     * 会算出运行时里根本不存在的模块。
+     */
+    @get:Input
+    abstract val multiRelease: Property<String>
+
     @get:Inject
     abstract val execOperations: ExecOperations
 
@@ -64,7 +74,17 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
         val exit =
             execOperations
                 .exec { spec ->
-                    spec.commandLine(listOf(tool(binDir, "jdeps"), "--print-module-deps", "--ignore-missing-deps") + paths)
+                    // --multi-release 必须给，且必须与 toolchain 版本一致：jackson 这类依赖是
+                    // 多发行版 jar，不给这个选项 jdeps 直接拒读，模块推导就废了。
+                    spec.commandLine(
+                        listOf(
+                            tool(binDir, "jdeps"),
+                            "--print-module-deps",
+                            "--ignore-missing-deps",
+                            "--multi-release",
+                            multiRelease.get(),
+                        ) + paths,
+                    )
                     spec.isIgnoreExitValue = true
                     spec.standardOutput = captured
                     spec.errorOutput = captured

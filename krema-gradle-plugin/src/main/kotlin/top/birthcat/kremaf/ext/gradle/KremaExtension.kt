@@ -52,6 +52,14 @@ abstract class KremaFrontendExtension {
     /** 前端生产构建命令，覆盖 `krema.toml` 的 `[build].frontend_command`。 */
     abstract val buildCommand: Property<String>
 
+    /**
+     * 前端依赖安装命令，如 `pnpm install`。
+     *
+     * 用户自己写、用什么包管理器只有他知道，插件不猜：装了 pnpm 的项目按 pnpm 装，装了 yarn 的按 yarn 装，
+     * 走哪个都行。不写就不装 —— 此时 `node_modules` 得由用户自己准备好。
+     */
+    abstract val installCommand: Property<String>
+
     /** 前端 dev 命令，覆盖 `krema.toml` 的 `[build].frontend_dev_command`。 */
     abstract val devCommand: Property<String>
 

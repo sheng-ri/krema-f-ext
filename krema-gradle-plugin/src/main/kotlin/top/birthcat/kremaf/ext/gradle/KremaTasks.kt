@@ -9,6 +9,7 @@ import org.gradle.api.file.Directory
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.bundling.Zip
+import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleRunTask
@@ -42,7 +43,20 @@ internal fun Project.registerKremaTasks() {
         // 插件只能按它去读：读 build/krema 下的目录等于读一个前端工具从不写的地方，prod 的 app jar 会空着 web/。
         task.description = "跑前端生产构建（npm 命令），产物目录取自 krema.toml 的 out_dir 并声明成可缓存输出"
         task.configureProject(ext)
-        task.buildCommand.convention(ext.frontend.buildCommand)
+        // 前端命令：toml 的 frontend_* 是底，`krema.frontend { }` 里显式写的压过它。
+        // 之前只接了扩展那一侧，toml 里的 frontend_command 实际从没被读进来过 ——
+        // 默认值恰好相同，把这个洞盖住了。
+        //
+        // 用 flatMapIfPresent 而不是接两个 convention：Gradle 的 convention 只看这个 Property
+        // 自己有没有值，不是「前一个 convention 有没有值」，所以接第二个会把 toml 的兜底顶掉 ——
+        // 哪怕扩展那边压根没赋值。
+        val tomlFrontend = providers.provider { kremaConfig(ext).frontend }
+        task.buildCommand.convention(tomlFrontend.map { it.buildCommand })
+        ext.frontend.buildCommand.orNull
+            ?.let { task.buildCommand.convention(it) }
+        task.installCommand.convention(tomlFrontend.map { it.installCommand })
+        ext.frontend.installCommand.orNull
+            ?.let { task.installCommand.convention(it) }
         task.distDir.convention(
             providers
                 .provider { kremaConfig(ext).build.outDir }
@@ -75,6 +89,7 @@ internal fun Project.registerKremaTasks() {
         task.configureProject(ext)
         task.runtimeImageDir.convention(task.outputDir.dir("runtime"))
         task.jdkBinDir.set(jdkBinDir())
+        task.multiRelease.set(toolchainVersion())
         task.classpathFiles.from(classpath.classesDirs)
         task.classpathFiles.from(classpath.runtimeClasspath)
         // 模块推导读的是编译产出，镜像因此建立在 classes 之上。
@@ -265,12 +280,17 @@ private fun currentTarget(): String = ZIP_TARGET
 /** 编译所用 JDK 的 `bin` 目录：jlink、jdeps 与 jpackage 跟着编译用的 JDK 走，而不是跟着 PATH 走。 */
 private fun Project.jdkBinDir(): Provider<String> {
     val toolchains = extensions.getByType(JavaToolchainService::class.java)
-    val languageVersion = extensions.getByType(JavaPluginExtension::class.java).toolchain.languageVersion
     return toolchains
-        .launcherFor { spec -> spec.languageVersion.set(languageVersion) }
+        .launcherFor { spec -> spec.languageVersion.set(toolchainLanguageVersion()) }
         .map {
             it.metadata.installationPath
                 .dir("bin")
                 .asFile.absolutePath
         }
 }
+
+private fun Project.toolchainLanguageVersion(): Provider<JavaLanguageVersion> =
+    extensions.getByType(JavaPluginExtension::class.java).toolchain.languageVersion
+
+/** toolchain 的主版本号，给 jdeps 的 `--multi-release` 用。 */
+private fun Project.toolchainVersion(): Provider<String> = toolchainLanguageVersion().map { it.toString() }

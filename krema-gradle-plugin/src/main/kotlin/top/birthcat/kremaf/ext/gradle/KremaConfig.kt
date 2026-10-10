@@ -39,6 +39,7 @@ data class Bundle(
 /** 前端构建输入：命令拼装只认这里，不认锁文件。 */
 data class Frontend(
     val buildCommand: String = "npm run build",
+    val installCommand: String? = null,
     val devCommand: String = "npm run dev",
     val devUrl: String = "http://localhost:5173",
     val workingDir: Path? = null,

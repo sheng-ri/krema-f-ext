@@ -12,6 +12,7 @@ import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -40,6 +41,16 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
     @get:Input
     abstract val buildCommand: Property<String>
 
+    /**
+     * 前端依赖安装命令，如 `pnpm install`；不配就不装。
+     *
+     * 用户自己声明用哪个包管理器，插件不猜 —— 猜错的表现是「装完了但构建还是找不到 vite」，
+     * 比不装更难查。
+     */
+    @get:Input
+    @get:Optional
+    abstract val installCommand: Property<String>
+
     /** 前端输入：项目根的 `package.json` 与存在的锁文件。缺失的候选不在集合里。 */
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)
@@ -59,17 +70,29 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
 
     @TaskAction
     fun build() {
+        // 先装依赖再构建：删干净仓库后 node_modules 并不存在，直接构建会在「vite 找不到」这种
+        // 与配置无关的地方炸掉。没配 installCommand 就跳过，那时用户自己负责把依赖准备好。
+        installCommand.orNull?.let { install(it) }
+        run(buildCommand.get(), "前端构建")
+    }
+
+    private fun install(command: String) = run(command, "前端依赖安装")
+
+    private fun run(
+        command: String,
+        label: String,
+    ) {
         val captured = java.io.ByteArrayOutputStream()
         val result =
             execOperations.exec { spec ->
-                spec.commandLine(buildCommand.get().trim().split(Regex("\\s+")))
+                spec.commandLine(command.trim().split(Regex("\\s+")))
                 spec.workingDir(projectDir.get().asFile)
                 spec.isIgnoreExitValue = true
                 spec.standardOutput = captured
                 spec.errorOutput = captured
             }
         if (result.exitValue != 0) {
-            throw GradleException("前端构建失败（命令：${buildCommand.get()}）：\n$captured")
+            throw GradleException("$label 失败（命令：$command）：\n$captured")
         }
     }
 }

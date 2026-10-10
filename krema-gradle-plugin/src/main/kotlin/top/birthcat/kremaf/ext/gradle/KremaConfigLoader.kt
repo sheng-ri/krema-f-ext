@@ -55,6 +55,7 @@ class KremaConfigLoader {
     private fun fromFrontend(toml: Toml?): Frontend =
         Frontend(
             buildCommand = toml?.getString("frontend_command", "npm run build") ?: "npm run build",
+            installCommand = toml?.getString("frontend_install_command"),
             devCommand = toml?.getString("frontend_dev_command", "npm run dev") ?: "npm run dev",
             devUrl =
                 toml?.getString("frontend_dev_url", "http://localhost:5173")
