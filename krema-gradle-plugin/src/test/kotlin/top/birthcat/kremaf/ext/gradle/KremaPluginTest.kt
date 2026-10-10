@@ -139,7 +139,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/kerma/dist/index.html")
+                .resolve("build/krema/dist/index.html")
                 .toFile()
                 .isFile,
             "前端没产出 dist：\n${result.output}",
@@ -155,7 +155,7 @@ class KremaPluginTest {
         val fakeNpm =
             fakeNpm(
                 projectDir,
-                "mkdir -p build/kerma/dist\nprintf '<html></html>' > build/kerma/dist/index.html",
+                "mkdir -p build/krema/dist\nprintf '<html></html>' > build/krema/dist/index.html",
             )
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
@@ -166,7 +166,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/kerma/dist/index.html")
+                .resolve("build/krema/dist/index.html")
                 .toFile()
                 .isFile,
             "首次运行没产出 dist：\n${first.output}",
@@ -217,7 +217,7 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/kerma/dist\necho hi > build/kerma/dist/index.html")
+        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(
             projectDir.toPath().resolve("build.gradle.kts"),
@@ -253,7 +253,7 @@ class KremaPluginTest {
         val result = runGradle(projectDir, KremaTaskNames.SIGNER_GENERATE)
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.SIGNER_GENERATE}")?.outcome, result.output)
-        val key = projectDir.toPath().resolve("build/kerma/keys/krema.key")
+        val key = projectDir.toPath().resolve("build/krema/keys/krema.key")
         assertTrue(key.toFile().isFile, "kremaSignerGenerate 没落私钥")
         assertTrue(
             Files.readString(key).startsWith("-----BEGIN PRIVATE KEY-----"),
@@ -267,7 +267,7 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/kerma/dist\necho hi > build/kerma/dist/index.html")
+        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
         writeToml(projectDir)
@@ -278,7 +278,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/kerma/prod")
+                .resolve("build/krema/prod")
                 .toFile()
                 .exists(),
             "kremaBundleProd 没落 prod 产物目录",
@@ -291,7 +291,7 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/kerma/dist\necho hi > build/kerma/dist/index.html")
+        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
         writeToml(projectDir)
@@ -309,18 +309,18 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/kerma/dev")
+                .resolve("build/krema/dev")
                 .toFile()
                 .exists(),
-            "dev 档没落 build/kerma/dev",
+            "dev 档没落 build/krema/dev",
         )
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/kerma/prod")
+                .resolve("build/krema/prod")
                 .toFile()
                 .exists(),
-            "prod 档没落 build/kerma/prod",
+            "prod 档没落 build/krema/prod",
         )
     }
 

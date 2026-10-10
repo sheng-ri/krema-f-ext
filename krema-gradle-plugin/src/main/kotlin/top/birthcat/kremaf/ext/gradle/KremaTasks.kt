@@ -30,7 +30,7 @@ internal fun Project.registerKremaTasks() {
     tasks.register(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java) { task ->
         // 内部支撑 task：不进 krema 分组，也不出现在 KremaTaskNames.ALL（用户面向的 8 张）。
         task.group = null
-        task.description = "跑前端生产构建（npm 命令），产物为 build/kerma/dist 并声明成可缓存输出"
+        task.description = "跑前端生产构建（npm 命令），产物为 build/krema/dist 并声明成可缓存输出"
         task.configureProject(ext)
         task.buildCommand.convention(ext.frontend.buildCommand)
         task.distDir.convention(task.outputDir.dir("dist"))
@@ -44,7 +44,7 @@ internal fun Project.registerKremaTasks() {
 
     tasks.register(KremaTaskNames.BUILD, KremaBuildTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "让 Gradle 编译主 source set，并把前端 dist 收进 build/kerma"
+        task.description = "让 Gradle 编译主 source set，并把前端 dist 收进 build/krema"
         task.configureProject(ext)
         // 编译交回 Gradle：kremaBuild 跑在 compileJava / processResources 之后。
         task.dependsOn(tasks.named("classes"))

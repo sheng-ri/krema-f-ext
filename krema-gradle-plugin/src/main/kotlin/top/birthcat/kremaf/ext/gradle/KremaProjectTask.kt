@@ -25,7 +25,7 @@ abstract class KremaProjectTask : KremaConfigTask() {
     protected fun bundleSettings(): BundleSettings = bundleSettings(outputDir.get().asFile.toPath())
 }
 
-/** 配置输入 + 产物目录约定（默认 `build/kerma`）。 */
+/** 配置输入 + 产物目录约定（默认 `build/krema`）。 */
 internal fun KremaProjectTask.configureProject(ext: KremaExtension) {
     (this as KremaConfigTask).configureProject(ext)
     outputDir.convention(ext.outputDir.orElse(project.layout.buildDirectory.dir("krema")))
