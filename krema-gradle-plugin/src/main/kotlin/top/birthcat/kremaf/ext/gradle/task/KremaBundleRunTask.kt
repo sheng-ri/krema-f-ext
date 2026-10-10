@@ -13,6 +13,7 @@ import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.KremaConfigTask
 import top.birthcat.kremaf.ext.gradle.KremaProcessCleanupService
 import top.birthcat.kremaf.ext.gradle.PlatformBundler
+import java.util.concurrent.TimeUnit
 
 /**
  * 起并阻塞前台跑 bundle 里的应用进程。
@@ -60,6 +61,9 @@ abstract class KremaBundleRunTask : KremaConfigTask() {
 
         val app = bundler.launch(bundler.bundlePath(settings, dev.get()), emptyMap())
         cleanup.register(app)
-        app.waitFor()
+        // 轮询式等待：java 的 waitFor() 无视线程中断会卡死任务线程，导致构建取消时 cleanup 服务收不到收尾信号。
+        while (!Thread.currentThread().isInterrupted()) {
+            if (app.waitFor(500, TimeUnit.MILLISECONDS)) break
+        }
     }
 }
