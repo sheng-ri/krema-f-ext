@@ -38,12 +38,16 @@ internal fun Project.registerKremaTasks() {
     tasks.register(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java) { task ->
         // 用户面向的前端构建 task：进 krema 分组，也出现在 KremaTaskNames.ALL（与 kremaBuild 一并构成公开 family）。
         task.group = KremaTaskNames.GROUP
-        // 前端产物落在 build/krema/frontend：bundle 的形态目录 dist/ 已经整块归打包 task 所有，
-        // 前端 dist 若也叫 dist 就会与 build/krema/dist/{dev,prod} 交叠成 Gradle 认下的隐式依赖冲突。
-        task.description = "跑前端生产构建（npm 命令），产物为 build/krema/frontend 并声明成可缓存输出"
+        // 前端产物落在 krema.toml 的 out_dir（默认 dist/，相对项目根），也就是前端工具链自己的落点。
+        // 插件只能按它去读：读 build/krema 下的目录等于读一个前端工具从不写的地方，prod 的 app jar 会空着 web/。
+        task.description = "跑前端生产构建（npm 命令），产物目录取自 krema.toml 的 out_dir 并声明成可缓存输出"
         task.configureProject(ext)
         task.buildCommand.convention(ext.frontend.buildCommand)
-        task.distDir.convention(task.outputDir.dir("frontend"))
+        task.distDir.convention(
+            providers
+                .provider { kremaConfig(ext).build.outDir }
+                .map { layout.projectDirectory.dir(it) },
+        )
         // 前端输入在项目根解析；哪些锁文件存在就收集哪些，缺失的候选自然不在集合里。
         val projectDir = project.layout.projectDirectory
         task.frontendInputs.from(
@@ -179,14 +183,24 @@ private fun Project.registerPortableZip(
 
 /** 便携包 zip 的文件名前缀 `<app>-<version>`：名字带版本，CI 才认得出该传哪一份。 */
 private fun Project.bundleNaming(ext: KremaExtension): String {
+    val config = kremaConfig(ext)
+    return "${config.packageName}-${config.version}"
+}
+
+/**
+ * 读 `krema.toml`。
+ *
+ * 走 `krema { }` 显式指定的路径，没指定才用项目根下的约定位置 —— 与 [KremaConfigTask.configFilePath] 的取法一致。
+ * 注册期就要用到配置（如前端产物目录），故这里在配置期直接读文件，而不是等 task 执行。
+ */
+private fun Project.kremaConfig(ext: KremaExtension): KremaConfig {
     val toml =
         ext.configFile
             .orElse(layout.projectDirectory.file("krema.toml"))
             .get()
             .asFile
             .toPath()
-    val config = KremaConfigLoader().loadOrDefault(toml)
-    return "${config.packageName}-${config.version}"
+    return KremaConfigLoader().loadOrDefault(toml)
 }
 
 private fun bundleDescription(

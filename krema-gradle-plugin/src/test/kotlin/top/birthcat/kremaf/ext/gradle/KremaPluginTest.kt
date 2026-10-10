@@ -33,8 +33,13 @@ class KremaPluginTest {
         /** 三平台的格式各写一个，用于验证筛选只留宿主平台的子集。 */
         const val ALL_FORMATS = "BundleFormat.DMG, BundleFormat.MSI, BundleFormat.APP_IMAGE, BundleFormat.DEB"
 
-        /** 假前端构建产物：只落一个 index.html，够断言资产路径用。 */
-        const val FRONTEND_BUILD_SCRIPT = "mkdir -p build/krema/frontend\necho '<html></html>' > build/krema/frontend/index.html"
+        /**
+         * 假前端构建产物：只落一个 index.html，够断言资产路径用。
+         *
+         * 落在项目根的 `dist/`，也就是 vite 等前端工具链默认的落点、插件从 `krema.toml` 的 `out_dir` 读到的那个目录。
+         * 刻意不写成插件当前读的位置：fixture 顺着实现写，插件改错地方时测试照样绿，那个洞就是这么漏过去的。
+         */
+        const val FRONTEND_BUILD_SCRIPT = "mkdir -p dist\necho '<html></html>' > dist/index.html"
 
         /** `writeToml` 里写的包名，也就是 jpackage `--name` 与 app jar 的名字。 */
         const val APP_NAME = "consumer-app"
@@ -238,7 +243,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/krema/frontend/index.html")
+                .resolve("dist/index.html")
                 .toFile()
                 .isFile,
             "前端没产出 dist：\n${result.output}",
@@ -261,7 +266,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/krema/frontend/index.html")
+                .resolve("dist/index.html")
                 .toFile()
                 .isFile,
             "首次运行没产出 dist：\n${first.output}",
@@ -481,6 +486,44 @@ class KremaPluginTest {
         assertTrue(
             entries.contains("web/index.html"),
             "prod 的 app jar 该带上前端资产：\n$entries",
+        )
+    }
+
+    @Test
+    @DisplayName("前端产物目录认 krema.toml 的 out_dir")
+    fun frontendHonorsOutDir(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        writeMainJava(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("krema.toml"),
+            """
+            [package]
+            name = "consumer-app"
+            identifier = "com.example.app"
+            version = "0.1.0"
+
+            [build]
+            out_dir = "custom-dist"
+            """.trimIndent(),
+        )
+        val fakeNpm =
+            fakeNpm(
+                projectDir,
+                "mkdir -p custom-dist\necho '<html></html>' > custom-dist/index.html",
+            )
+        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
+
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_DIST_PROD, fakeNpm = fakeNpm)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_DIST_PROD}")?.outcome, result.output)
+        // 前端命令是用户给的，产物落在哪由 out_dir 说了算；插件不认它就会读空目录，app jar 里没有 web/。
+        val entries = jarEntries(appJar(projectDir, "prod"))
+        assertTrue(
+            entries.contains("web/index.html"),
+            "out_dir 改了却没跟着收进 app jar：\n$entries",
         )
     }
 
