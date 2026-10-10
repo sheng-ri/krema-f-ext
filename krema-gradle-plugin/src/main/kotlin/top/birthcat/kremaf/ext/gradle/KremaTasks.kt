@@ -5,12 +5,15 @@
 package top.birthcat.kremaf.ext.gradle
 
 import org.gradle.api.Project
+import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.provider.Provider
+import org.gradle.jvm.toolchain.JavaToolchainService
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleRunTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
 import top.birthcat.kremaf.ext.gradle.task.KremaFrontendBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaInitTask
+import top.birthcat.kremaf.ext.gradle.task.KremaRuntimeImageTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerGenerateTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerSignTask
 
@@ -54,6 +57,19 @@ internal fun Project.registerKremaTasks() {
 
     // dev / prod 两张打包 task：都先跑 kremaBuild（编译 + 前端），dev 额外收最小形态、不打包 dist。
     val classpath = kremaApplicationClasspath()
+
+    tasks.register(KremaTaskNames.RUNTIME_IMAGE, KremaRuntimeImageTask::class.java) { task ->
+        task.group = KremaTaskNames.GROUP
+        task.description = "用 jdeps 推导模块、jlink 裁出最小运行时镜像（build/krema/runtime）"
+        task.configureProject(ext)
+        task.runtimeImageDir.convention(task.outputDir.dir("runtime"))
+        task.jdkBinDir.set(jdkBinDir())
+        task.classpathFiles.from(classpath.classesDirs)
+        task.classpathFiles.from(classpath.runtimeClasspath)
+        // 模块推导读的是编译产出，镜像因此建立在 classes 之上。
+        task.dependsOn(tasks.named("classes"))
+    }
+
     registerBundle(KremaTaskNames.BUNDLE_DEV, dev = true, ext, classpath)
     registerBundle(KremaTaskNames.BUNDLE_PROD, dev = false, ext, classpath)
 
@@ -144,4 +160,17 @@ private fun currentTarget(): String {
     val platform = PlatformDetector.detect().name.lowercase()
     val arch = PlatformDetector.getArch()
     return "$platform-$arch"
+}
+
+/** 编译所用 JDK 的 `bin` 目录：jlink 与 jdeps 跟着编译用的 JDK 走，而不是跟着 PATH 走。 */
+private fun Project.jdkBinDir(): Provider<String> {
+    val toolchains = extensions.getByType(JavaToolchainService::class.java)
+    val languageVersion = extensions.getByType(JavaPluginExtension::class.java).toolchain.languageVersion
+    return toolchains
+        .launcherFor { spec -> spec.languageVersion.set(languageVersion) }
+        .map {
+            it.metadata.installationPath
+                .dir("bin")
+                .asFile.absolutePath
+        }
 }

@@ -48,6 +48,7 @@ class KremaConfigLoader {
         Build(
             outDir = toml?.getString("out_dir", "dist") ?: "dist",
             mainClass = toml?.getString("main_class"),
+            assetsPath = toml?.getString("assets_path", "web") ?: "web",
         )
 
     /** 前端命令落在 `[build]` 段的 `frontend_*` 键上，但住处是 [Frontend]。 */
