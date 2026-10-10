@@ -7,6 +7,7 @@ package top.birthcat.kremaf.ext.gradle
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Internal
 
 /**
@@ -32,6 +33,10 @@ abstract class KremaExtension {
     /** 前端输入，由插件在 `apply` 时接上 `frontend { }` 块。 */
     @Internal
     lateinit var frontend: KremaFrontendExtension
+
+    /** 平台包输入，由插件在 `apply` 时接上 `bundling { }` 块。 */
+    @Internal
+    lateinit var bundling: KremaBundlingExtension
 }
 
 /**
@@ -52,4 +57,19 @@ abstract class KremaFrontendExtension {
 
     /** 前端 dev server 地址，覆盖 `krema.toml` 的 `[build].frontend_dev_url`。 */
     abstract val devUrl: Property<String>
+}
+
+/**
+ * `krema.bundling { }`。
+ *
+ * 只管平台包（便携包不给配）：用户写一份跨平台的 `platformFormats`，构建时按宿主平台取子集，
+ * 所以同一份构建脚本在哪个平台跑都成立，不需要「这台机器跳过哪几个格式」的开关。
+ */
+abstract class KremaBundlingExtension {
+    /** 要出的平台包格式；写全平台也可，构建时只取宿主平台的子集。默认空集合 —— 空即本平台不出平台包。 */
+    abstract val platformFormats: SetProperty<BundleFormat>
+
+    /** 宿主平台上实际要出的平台包格式；宿主平台之外的格式在这里就被丢掉，不报错也不跳过 task。 */
+    fun formatsForHost(platform: Platform = PlatformDetector.detect()): List<BundleFormat> =
+        platformFormats.get().filter { it.platform == platform }
 }
