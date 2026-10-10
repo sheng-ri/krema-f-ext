@@ -86,11 +86,24 @@ class KremaPluginTest {
     private fun portableZip(
         projectDir: File,
         tier: String,
-    ): Path {
-        val platform = PlatformDetector.detect().name.lowercase()
-        val target = "$platform-${PlatformDetector.getArch()}"
-        return bundleDir(projectDir, "dist", tier).resolve("$APP_NAME-0.1.0-$target.zip")
-    }
+    ): Path = bundleDir(projectDir, "dist", tier).resolve("$APP_NAME-0.1.0-${hostTarget()}.zip")
+
+    /** 宿主平台标识，与插件内部拼法同款。 */
+    private fun hostTarget(): String = "${PlatformDetector.detect().name.lowercase()}-${PlatformDetector.getArch()}"
+
+    /**
+     * app-image 里那个原生启动器的路径，也就是 run task 真正起的进程。
+     *
+     * 拿 [PlatformBundler] 算，而不是在测试里重拼一遍平台布局：这份路径是「应用进程长什么样」的唯一真相，
+     * 测试另抄一份的话，插件改错布局测试照样绿。路径取绝对形式，因为 `ProcessBuilder` 起的就是绝对路径。
+     */
+    private fun launcherPath(
+        projectDir: File,
+        tier: String,
+    ): Path =
+        PlatformBundler(hostTarget())
+            .launcherPath(BundleSettings(appName = APP_NAME, outputDir = bundleDir(projectDir, "dist", tier)))
+            .toAbsolutePath()
 
     private fun exeSuffix(): String = if (PlatformDetector.detect() == Platform.WINDOWS) ".exe" else ""
 
@@ -604,7 +617,7 @@ class KremaPluginTest {
             connection
                 .newBuild()
                 .forTasks(KremaTaskNames.BUNDLE_RUN_DEV)
-                .withArguments("--offline", "--configuration-cache", "-I", initScript.absolutePath)
+                .withArguments("--configuration-cache", "-I", initScript.absolutePath)
                 .withCancellationToken(tokenSource.token())
         launcher.setStandardOutput(FileOutputStream("/tmp/krema-run.log"))
         launcher.setStandardError(FileOutputStream("/tmp/krema-run.log"))
@@ -612,17 +625,27 @@ class KremaPluginTest {
         val buildThread = Thread { runCatching { launcher.run() }.onFailure { buildFailure = it } }
         buildThread.start()
 
-        val appUp = waitForProc("com.example.app.Main")
-        val devUp = waitForProc("devserver")
-        dumpProcs("/tmp/krema-procs.log")
+        // 盯启动器自己的路径，而不是主类名：jpackage 产出的原生启动器把 JVM 跑在自己进程里，
+        // 命令行上只有启动器路径，`com.example.app.Main` 一个字都不会出现。
+        // 拿主类名当 marker 反而会撞上打包期的 jpackage 进程（它带 `--main-class` 参数），
+        // 于是「等进程出现」等到了 jpackage、「等进程消失」等到了 jpackage 退出，
+        // 断言全程为真却与 run task 起的应用进程无关——回收真坏掉也照样绿。
+        val appMarker = launcherPath(projectDir, "dev").toString()
+        val appUp = waitForProc(appMarker)
+        // dev server 同样盯绝对路径，而不是 `devserver` 这个文件名：marker 是全机器匹配的，
+        // 上一轮跑剩的孤儿（父进程已退出、被 init 收养）会一直让 `waitGone("devserver")` 假阴性，
+        // 于是这条断言测的是「机器上恰好没有别的 dev server」，与本次构建的回收无关。
+        val devMarker = fakeDev.absolutePath
+        val devUp = waitForProc(devMarker)
+        dumpProcs("/tmp/krema-procs.log", projectDir)
         if (!appUp) error("app 进程没起来；buildFailure=${buildFailure?.stackTraceToString()}\n见 /tmp/krema-run.log / /tmp/krema-procs.log")
         assertTrue(devUp, "dev server 进程没起来，无法验证回收")
         // 等价于 Ctrl-C：取消本次构建，守护进程据此打断 run task 线程、触发 cleanup 回收进程树。
         tokenSource.cancel()
         buildThread.join(60_000)
 
-        assertTrue(waitGone("com.example.app.Main"), "run 中断后 app 进程仍存活")
-        assertTrue(waitGone("devserver"), "run 中断后 dev server 进程仍存活")
+        assertTrue(waitGone(appMarker), "run 中断后 app 进程仍存活")
+        assertTrue(waitGone(devMarker), "run 中断后 dev server 进程仍存活")
         connection.close()
     }
 
@@ -1033,16 +1056,18 @@ class KremaPluginTest {
                 .contains(marker)
         }
 
-    private fun dumpProcs(path: String) {
+    /** 诊断用：把本项目相关的进程命令行落盘。按项目目录过滤，别把全机器的 gradle/java 都塞进来。 */
+    private fun dumpProcs(
+        path: String,
+        projectDir: File,
+    ) {
         val sb = StringBuilder()
         ProcessHandle.current().descendants().toList().forEach { h ->
             sb.appendLine("DESC: ${h.info().commandLine().orElse("")}")
         }
         ProcessHandle.allProcesses().forEach { h ->
             val cl = h.info().commandLine().orElse("")
-            if (cl.contains("devserver") || cl.contains("com.example.app") || cl.contains("gradle")) {
-                sb.appendLine("ALL: $cl")
-            }
+            if (cl.contains(projectDir.absolutePath)) sb.appendLine("ALL: $cl")
         }
         File(path).writeText(sb.toString())
     }
