@@ -222,7 +222,7 @@ class PlatformBundler(
     private fun outputDir(settings: BundleSettings): Path = Files.createDirectories(settings.outputDir)
 }
 
-/** 打包输入：产物名、图标与深链。 */
+/** 打包输入：产物名、图标、深链，以及前端产物在 app jar classpath 上的落点。 */
 data class BundleSettings(
     val appName: String = "krema-app",
     val outputDir: Path = Path.of("."),
@@ -231,4 +231,5 @@ data class BundleSettings(
     val mainClass: String = "com.example.app.Main",
     val icon: Path? = null,
     val deepLinkSchemes: List<String> = emptyList(),
+    val assetsPath: String = "web",
 )
