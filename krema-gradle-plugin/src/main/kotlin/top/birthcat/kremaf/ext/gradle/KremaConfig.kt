@@ -22,10 +22,11 @@ data class KremaConfig(
     val deepLinkSchemes: List<String> = emptyList(),
 )
 
-/** 构建约定：产物目录、主类。 */
+/** 构建约定：产物目录、主类、前端产物在 classpath 上的落点。 */
 data class Build(
     val outDir: String = "dist",
     val mainClass: String? = null,
+    val assetsPath: String = "web",
 )
 
 /** 打包约定：图标与标识。 */

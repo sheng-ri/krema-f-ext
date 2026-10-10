@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle
 
+import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
 import org.gradle.tooling.CancellationTokenSource
@@ -20,6 +21,11 @@ import java.nio.file.Files
 import java.util.Properties
 
 class KremaPluginTest {
+    private companion object {
+        /** 测试 build script 里注册的那张探针 task，用来把插件解析出的资产路径打印出来。 */
+        const val ASSETS_PATH_PROBE = "showAssetsPath"
+    }
+
     @Test
     @DisplayName("插件应用后注册 krema 扩展")
     fun pluginRegistersExtension(
@@ -244,6 +250,45 @@ class KremaPluginTest {
     }
 
     @Test
+    @DisplayName("未配置资产路径时默认 web")
+    fun assetsPathDefaultsToWeb(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        writeToml(projectDir)
+        Files.writeString(projectDir.toPath().resolve("build.gradle"), assetsPathProbeGradle())
+
+        val result = runGradleWithPluginClasspath(projectDir, ASSETS_PATH_PROBE)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":$ASSETS_PATH_PROBE")?.outcome, result.output)
+        assertTrue(result.output.contains("assetsPath=web"), result.output)
+    }
+
+    @Test
+    @DisplayName("toml 里显式配置覆盖默认资产路径")
+    fun assetsPathFromToml(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("krema.toml"),
+            """
+            [package]
+            name = "consumer-app"
+
+            [build]
+            assets_path = "app-ui"
+            """.trimIndent(),
+        )
+        Files.writeString(projectDir.toPath().resolve("build.gradle"), assetsPathProbeGradle())
+
+        val result = runGradleWithPluginClasspath(projectDir, ASSETS_PATH_PROBE)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":$ASSETS_PATH_PROBE")?.outcome, result.output)
+        assertTrue(result.output.contains("assetsPath=app-ui"), result.output)
+    }
+
+    @Test
     @DisplayName("kremaSignerGenerate 生成 Ed25519 密钥对")
     fun signerGenerateKeyPair(
         @TempDir projectDir: File,
@@ -439,6 +484,45 @@ class KremaPluginTest {
             } ?: File("/opt/gradle")
         require(install.isDirectory) { "找不到本地 Gradle 9.8.0 安装：$install" }
         return install
+    }
+
+    /**
+     * 写一份 `build.gradle`，注册一张 task 把插件解析出的资产路径打印出来。
+     *
+     * 用 Groovy DSL 的 `apply plugin:`：插件 classpath 由 init 脚本注入 buildscript，
+     * `plugins { id(...) }` 那条路只认插件仓库，看不到注入的 classpath。
+     */
+    private fun assetsPathProbeGradle() =
+        """
+        apply plugin: "top.birthcat.kremaf.ext"
+
+        def loaderClass = Class.forName(
+            "top.birthcat.kremaf.ext.gradle.KremaConfigLoader", true, buildscript.classLoader)
+
+        tasks.register("$ASSETS_PATH_PROBE") {
+            def toml = layout.projectDirectory.file("krema.toml").asFile.toPath()
+            doLast {
+                println("assetsPath=" + loaderClass.newInstance().loadOrDefault(toml).build.assetsPath)
+            }
+        }
+        """.trimIndent()
+
+    /**
+     * 与 [runGradle] 同款，但用 init 脚本把被测插件的 classpath 注入 buildscript。
+     *
+     * `withPluginClasspath()` 只让 `plugins { id(...) }` 找得到插件，构建脚本自身拿不到插件的类；
+     * 探针要直接调插件的 API，只能走 [pluginClasspathInitScript] 那条注入路径。
+     */
+    private fun runGradleWithPluginClasspath(
+        projectDir: File,
+        vararg args: String,
+    ): BuildResult {
+        val initScript = pluginClasspathInitScript(projectDir)
+        return GradleRunner
+            .create()
+            .withProjectDir(projectDir)
+            .withArguments("--configuration-cache", "--stacktrace", "-I", initScript.absolutePath, *args)
+            .build()
     }
 
     private fun writeToml(projectDir: File) {

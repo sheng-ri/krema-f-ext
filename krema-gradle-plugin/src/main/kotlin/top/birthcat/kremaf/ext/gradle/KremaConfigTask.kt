@@ -85,6 +85,7 @@ abstract class KremaConfigTask : DefaultTask() {
             mainClass = config.build.mainClass ?: "${config.identifier}.Main",
             icon = config.bundle.icon?.let(dir::resolve),
             deepLinkSchemes = config.deepLinkSchemes,
+            assetsPath = config.build.assetsPath,
         )
     }
 }
