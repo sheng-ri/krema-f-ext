@@ -81,13 +81,29 @@ internal fun Project.registerKremaTasks() {
         task.dependsOn(tasks.named("classes"))
     }
 
-    registerBundle(KremaTaskNames.BUNDLE_DIST_DEV, BundleForm.DIST, dev = true, ext, classpath)
-    registerBundle(KremaTaskNames.BUNDLE_DIST_PROD, BundleForm.DIST, dev = false, ext, classpath)
+    val distDevDir = registerBundle(KremaTaskNames.BUNDLE_DIST_DEV, BundleForm.DIST, dev = true, ext, classpath)
+    val distProdDir = registerBundle(KremaTaskNames.BUNDLE_DIST_PROD, BundleForm.DIST, dev = false, ext, classpath)
     registerBundle(KremaTaskNames.BUNDLE_PLATFORM_DEV, BundleForm.PLATFORM, dev = true, ext, classpath)
     registerBundle(KremaTaskNames.BUNDLE_PLATFORM_PROD, BundleForm.PLATFORM, dev = false, ext, classpath)
 
-    registerRun(KremaTaskNames.BUNDLE_RUN_DEV, KremaTaskNames.BUNDLE_DIST_DEV, dev = true, ext, cleanup)
-    registerRun(KremaTaskNames.BUNDLE_RUN_PROD, KremaTaskNames.BUNDLE_DIST_PROD, dev = false, ext, cleanup)
+    // run 调试的是便携包，故拿 dist 那两张的产物目录；直接复用打包 task 算出的目录，
+    // 不自己再拼一遍 `krema/dist/{tier}`——两处各拼一次，目录约定一改就会有一边悄悄指错。
+    registerRun(
+        KremaTaskNames.BUNDLE_RUN_DEV,
+        KremaTaskNames.BUNDLE_DIST_DEV,
+        distDevDir,
+        dev = true,
+        ext,
+        cleanup,
+    )
+    registerRun(
+        KremaTaskNames.BUNDLE_RUN_PROD,
+        KremaTaskNames.BUNDLE_DIST_PROD,
+        distProdDir,
+        dev = false,
+        ext,
+        cleanup,
+    )
 
     tasks.register(KremaTaskNames.SIGNER_GENERATE, KremaSignerGenerateTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
@@ -103,13 +119,14 @@ internal fun Project.registerKremaTasks() {
     }
 }
 
+/** 注册一张打包 task，返回它的产物目录，供 run task 复用同一个 app-image 落点。 */
 private fun Project.registerBundle(
     name: String,
     form: BundleForm,
     dev: Boolean,
     ext: KremaExtension,
     classpath: KremaApplicationClasspath,
-) {
+): Provider<Directory> {
     val tier = if (dev) "dev" else "prod"
     val kremaRoot: Provider<Directory> = ext.outputDir.orElse(layout.buildDirectory.dir("krema"))
     // 产物路径按「形态 × 档位」固定成 build/krema/{dist|platform}/{dev|prod}，CI 的上传规则照这个写死。
@@ -145,8 +162,9 @@ private fun Project.registerBundle(
         task.dependsOn(tasks.named(KremaTaskNames.RUNTIME_IMAGE))
     }
 
-    if (!form.zipped) return
+    if (!form.zipped) return bundleDir
     registerPortableZip(name, bundleDir, ext)
+    return bundleDir
 }
 
 /**
@@ -215,6 +233,7 @@ private fun bundleDescription(
 private fun Project.registerRun(
     name: String,
     bundleTask: String,
+    bundleDir: Provider<Directory>,
     dev: Boolean,
     ext: KremaExtension,
     cleanup: Provider<KremaProcessCleanupService>,
@@ -228,12 +247,9 @@ private fun Project.registerRun(
                 "跑 prod 档应用（长驻，不进 CI 门禁）"
             }
         task.configureProject(ext)
-        // 便携包是唯一带启动器、跨档位通用的形态，run task 因此认它而不是平台包。
-        task.bundleDir.convention(
-            ext.outputDir
-                .orElse(layout.buildDirectory.dir("krema"))
-                .map { it.dir(BundleForm.DIST.id).dir(if (dev) "dev" else "prod") },
-        )
+        // 便携包是唯一带启动器、跨档位通用的形态，run task 因此认它而不是平台包；
+        // 目录直接取自那张打包 task，保证起的就是刚打出来的那份 app-image。
+        task.bundleDir.convention(bundleDir)
         task.target.convention(currentTarget())
         task.dev.convention(dev)
         task.devCommand.convention(ext.frontend.devCommand)
