@@ -23,14 +23,15 @@ if ! command -v appimagetool >/dev/null 2>&1; then
   chmod +x /usr/local/bin/appimagetool
 fi
 
-# --- appimagetool 封装 AppImage 要的 squashfs 工具链等（按需补齐） ---
+# --- appimagetool 封装 AppImage 要的 squashfs 工具链，以及 jpackage 打 deb 要的 fakeroot（按需补齐） ---
 MISSING_DEPS=""
-for dep in squashfs-tools patchelf file desktop-file-utils; do
+for dep in squashfs-tools patchelf file desktop-file-utils fakeroot; do
   bin=$(case "$dep" in
     squashfs-tools) echo mksquashfs ;;
     file) echo file ;;
     desktop-file-utils) echo desktop-file-validate ;;
     patchelf) echo patchelf ;;
+    fakeroot) echo fakeroot ;;
   esac)
   command -v "$bin" >/dev/null 2>&1 || MISSING_DEPS="$MISSING_DEPS $dep"
 done
