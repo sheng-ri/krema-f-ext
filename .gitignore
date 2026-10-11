@@ -13,3 +13,6 @@ dist/
 # 门禁里的 compileJava 保证它一定存在，IDE 与 tsc 需要时先跑一次编译即可。
 krema-demo/front/src/krema-commands.d.ts
 !.cnb/build/
+
+# appimagetool 抽出内部工具时落下的残留目录（手动跑工具才会产生）。
+squashfs-root/
