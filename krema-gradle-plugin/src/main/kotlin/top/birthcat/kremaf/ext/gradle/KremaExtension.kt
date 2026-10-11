@@ -29,6 +29,14 @@ abstract class KremaExtension {
     /** 主类，覆盖 `krema.toml` 的 `[build].main_class`。 */
     abstract val mainClass: Property<String>
 
+    /**
+     * 开发期前端 dev server 地址，注入给 `kremaDevRun` 起的应用进程（环境变量 `KREMA_DEV_URL`）。
+     *
+     * 覆盖 `krema.toml` 的 `[build].dev_url`；都不写则回落到内建默认 `http://localhost:5173`。
+     * 只在这一处给值，应用代码要不要读那个环境变量归它自己。
+     */
+    abstract val devUrl: Property<String>
+
     /** 前端输入，由插件在 `apply` 时接上 `frontend { }` 块。 */
     @Internal
     lateinit var frontend: KremaFrontendExtension
@@ -91,7 +99,7 @@ abstract class KremaRuntimeExtension {
 /**
  * `krema.bundling { }`。
  *
- * 只管平台包（便携包不给配）。三个平台各一个属性，各自的构建档位与宿主平台对不上就整份忽略 ——
+ * 只管平台包（未压缩的 app-image 由 `kremaBundle` 产出，这里不配）。三个平台各一个属性，各自的格式与宿主平台对不上就整份忽略 ——
  * 于是换机器不用改构建脚本，也不需要「这台机器跳过哪几个格式」的开关。
  *
  * 分成三个属性而不是一份混合列表，是为了让读脚本的人一眼看出哪个格式归哪个平台：
@@ -108,16 +116,55 @@ abstract class KremaBundlingExtension {
     abstract val linuxFormats: SetProperty<BundleFormat>
 
     /**
+     * 各平台的图标：`macIcon` 吃 icns、`winIcon` 吃 ico、`linuxIcon` 吃 png。
+     *
+     * 未配或文件不存在就跳过 `--icon`，不报错。三张都未配时退到 `krema.toml` 的 `[bundle].icon`
+     * 按宿主平台后缀兜底（见 [resolveBundleIcon]）。
+     */
+    abstract val macIcon: RegularFileProperty
+
+    /** Windows 图标（ico）。 */
+    abstract val winIcon: RegularFileProperty
+
+    /** Linux 图标（png）。 */
+    abstract val linuxIcon: RegularFileProperty
+
+    /**
+     * PATH 上没有 `appimagetool` 时是否自动下载一份到构建目录。默认 `true`。
+     *
+     * 仅影响 AppImage 这一条路径：其它格式走 jpackage，不碰 appimagetool。自动下载失败会明确报错，
+     * 给出「手动装 / 关开关」两条出路，不会静默当成成功。
+     */
+    abstract val appImageToolAutoDownload: Property<Boolean>
+
+    /**
      * 宿主平台上实际要出的平台包格式；其余两个平台的格式在这里就被丢掉，不报错也不跳过 task。
      *
      * 按属性取，不按枚举自身的 [BundleFormat.platform] 过滤：属性名已经声明了归属，
      * 再过一遍会让「把 `DMG` 写进 `windowsFormats`」这种笔误被静默吞掉而不是被发现。
      */
     fun formatsForHost(platform: Platform = PlatformDetector.detect()): Set<BundleFormat> =
-        when (platform) {
-            Platform.DARWIN -> macosFormats.get()
-            Platform.WINDOWS -> windowsFormats.get()
-            Platform.LINUX -> linuxFormats.get()
-            Platform.UNKNOWN -> emptySet()
-        }
+        selectHostFormats(platform, macosFormats.get(), windowsFormats.get(), linuxFormats.get())
 }
+
+/**
+ * 按宿主平台从三张属性里选要出的格式。纯函数便于单测：把「跨平台写的格式列表只留宿主子集」这一层
+ * 与 Gradle 的 `SetProperty` 解耦。
+ *
+ * @param platform 宿主平台
+ * @param macos macOS 属性里的格式
+ * @param windows Windows 属性里的格式
+ * @param linux Linux 属性里的格式
+ */
+fun selectHostFormats(
+    platform: Platform,
+    macos: Set<BundleFormat>,
+    windows: Set<BundleFormat>,
+    linux: Set<BundleFormat>,
+): Set<BundleFormat> =
+    when (platform) {
+        Platform.DARWIN -> macos
+        Platform.WINDOWS -> windows
+        Platform.LINUX -> linux
+        Platform.UNKNOWN -> emptySet()
+    }

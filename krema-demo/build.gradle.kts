@@ -43,6 +43,9 @@ krema {
     bundling {
         macosFormats = setOf(BundleFormat.APP, BundleFormat.DMG, BundleFormat.PKG)
         windowsFormats = setOf(BundleFormat.EXE, BundleFormat.MSI)
-        linuxFormats = setOf(BundleFormat.APP_IMAGE, BundleFormat.DEB, BundleFormat.RPM)
+        // 本机（Linux）只出能在这里打出来的格式：AppImage 走 appimagetool（可自动下载），deb 走 jpackage。
+        // rpm 需要 rpmbuild，本机没有，故不配；要打 rpm 的 runner 自己加并装好 rpmbuild ——
+        // 配了而工具不在，kremaPlatformRpm 会明确失败，不静默跳过。
+        linuxFormats = setOf(BundleFormat.APP_IMAGE, BundleFormat.DEB)
     }
 }

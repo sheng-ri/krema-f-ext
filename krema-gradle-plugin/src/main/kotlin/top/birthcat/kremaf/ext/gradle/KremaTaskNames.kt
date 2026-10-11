@@ -10,11 +10,14 @@ object KremaTaskNames {
     const val INIT = "kremaInit"
     const val BUILD = "kremaBuild"
 
-    /** 临时可运行的 bundle：jpackage 的 app-image 目录（不含 zip），供 `kremaBundleRun` 直接起。 */
+    /** 未压缩、可直接运行的 app-image 目录：`kremaBundle` 产出，是所有平台包的共同底座。 */
     const val BUNDLE = "kremaBundle"
 
-    /** 平台包（platform）：本平台原生的可安装件，各格式在 #62 接上。 */
+    /** 平台包聚合 task：依赖本平台配置了的各 `kremaPlatform<格式>` task，没配格式时空跑成功。 */
     const val BUNDLE_PLATFORM = "kremaBundlePlatform"
+
+    /** 开发期：起 classpath 上的应用进程并注入 `KREMA_DEV_URL`。 */
+    const val DEV_RUN = "kremaDevRun"
 
     const val BUNDLE_RUN = "kremaBundleRun"
     const val SIGNER_GENERATE = "kremaSignerGenerate"
@@ -36,7 +39,7 @@ object KremaTaskNames {
 
     const val JDEPS_MODULES_VERBOSE = "jdepsModulesVerbose"
 
-    /** 全部 task 名，声明顺序即 `gradlew tasks` 里的出现顺序。 */
+    /** 全部静态 task 名，声明顺序即 `gradlew tasks` 里的出现顺序。按需注册的 `kremaPlatform<格式>` 不在此列。 */
     val ALL =
         listOf(
             INIT,
@@ -47,6 +50,7 @@ object KremaTaskNames {
             JDEPS_MODULES_VERBOSE,
             BUNDLE,
             BUNDLE_PLATFORM,
+            DEV_RUN,
             BUNDLE_RUN,
             SIGNER_GENERATE,
             SIGNER_SIGN,

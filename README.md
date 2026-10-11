@@ -63,16 +63,20 @@ krema {
 
 | task | 对应上游 CLI | 做什么 |
 |---|---|---|
-| `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`），主类落在 `src/main/java` |
+| `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`），主类落在 `src/main/java`；主类读 `KREMA_DEV_URL` 并用 `prodAssets("/assets")` |
 | `kremaBuild` | build | 聚合后端与前端：让 Gradle 编译主 source set，跑前端生产构建（`frontend.buildCommand`），把后端 app jar 与独立的前端 assets jar 作为可缓存、UP-TO-DATE 的产出收进 `build/krema/lib` |
-| `kremaFrontendBuild` | — | 跑前端生产构建（`frontend.buildCommand`），产物目录取 `krema.toml` 的 `out_dir`（默认 `dist/`，落在前端目录下）声明成可缓存、UP-TO-DATE 的输出；被 `kremaBuild` 依赖，也可单独跑只重做前端 |
+| `kremaFrontendBuild` | — | 跑前端生产构建（`frontend.buildCommand`，可选 `installCommand` 先装依赖），产物目录取 `krema.toml` 的 `out_dir`（默认 `dist/`，落在前端目录下）声明成可缓存、UP-TO-DATE 的输出；被 `kremaBuild` 依赖，也可单独跑只重做前端 |
 | `kremaRuntimeImage` | — | 用 jdeps 推导模块、jlink 裁出最小运行时镜像，产物落 `build/krema/runtime`；`runtime.modules` 非空时改用你给的清单 |
 | `jdepsModules` | — | 打印 jdeps 推导出的运行时模块清单，不裁镜像。想手动指定模块前先跑它看清推导结果 |
 | `jdepsModulesVerbose` | — | 打印 `jdeps -v` 的逐包依赖明细，并把原始输出写到 `build/krema/jdeps-verbose.txt` 供事后分析 |
-| `kremaBundleDist` | bundle | 便携包：jpackage 产出的 app-image 目录外加一份 `<app>-<version>-<target>.zip`，产物落 `build/krema/dist` |
-| `kremaBundlePlatform` | bundle | 平台包：本平台原生的可安装件底座（各格式在别处接上），产物落 `build/krema/platform` |
-| `kremaBundleRun` | — | 跑应用，长驻前台，中断时回收进程，不进 CI 门禁 |
+| `kremaBundle` | bundle | 未压缩、可直接运行的 app-image 目录，自带 jlink 裁出的最小运行时，产物落 `build/krema/bundle`；是所有平台包的共同底座 |
+| `kremaPlatform<格式>` | bundle | 单个平台包格式（如 `kremaPlatformDeb` / `kremaPlatformAppImage`），**按需注册**：只注册宿主平台 `bundling` 里配置了的那些，复用 `kremaBundle` 的 app-image 打成本格式可安装件，产物落 `build/krema/platform/<格式 id>` |
+| `kremaBundlePlatform` | bundle | 聚合：依赖宿主平台配置了的各 `kremaPlatform<格式>` task；没配格式时空跑成功 |
+| `kremaDevRun` | — | 开发期：在 classpath 上起后端应用进程并把前端地址作为 `KREMA_DEV_URL` 注入；不依赖打包，前端 dev server 由你自己开 |
+| `kremaBundleRun` | — | 起 `kremaBundle` 刚打出的那份 app-image，长驻前台，中断时回收进程，不进 CI 门禁 |
 | `kremaSignerGenerate` | signer generate | 生成一对签名密钥（Ed25519） |
 | `kremaSignerSign` | signer sign | 用私钥给产物签名 |
+
+`krema { bundling { } }` 按平台配格式：`macosFormats` / `windowsFormats` / `linuxFormats`，各写 `Set<BundleFormat>`。换机器不用改脚本——构建自动只打宿主平台那份；把 `DMG` 误写进 `windowsFormats` 会被静默丢弃而非报错。图标三属性 `macIcon`（icns）/ `winIcon`（ico）/ `linuxIcon`（png），没配就跳过；`krema.toml` 的 `[bundle].icon` 按宿主平台后缀兜底。
 
 签名与 native-image 不在本骨架范围内。

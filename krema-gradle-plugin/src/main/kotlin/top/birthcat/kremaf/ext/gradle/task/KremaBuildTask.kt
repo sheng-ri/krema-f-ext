@@ -7,8 +7,6 @@ package top.birthcat.kremaf.ext.gradle.task
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.InputFiles
-import org.gradle.api.tasks.PathSensitive
-import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.ASSETS_DIR
@@ -40,13 +38,17 @@ abstract class KremaBuildTask : KremaProjectTask() {
 
     /** 前端 dist，打进独立的 assets jar（Krema 从 classpath 的 `assets/` 读）。 */
     @get:InputFiles
-    @get:PathSensitive(PathSensitivity.NONE)
     abstract val distFiles: ConfigurableFileCollection
 
     @TaskAction
     fun build() {
         val settings = bundleSettings()
-        val libDir = outputDir.get().asFile.toPath().resolve(LIB_DIR)
+        val libDir =
+            outputDir
+                .get()
+                .asFile
+                .toPath()
+                .resolve(LIB_DIR)
         libDir.toFile().deleteRecursively()
         Files.createDirectories(libDir)
         assembleAppJar(libDir, settings)

@@ -48,6 +48,7 @@ class KremaConfigLoader {
         Build(
             outDir = toml?.getString("out_dir", "dist") ?: "dist",
             mainClass = toml?.getString("main_class"),
+            devUrl = toml?.getString("dev_url"),
         )
 
     /** 前端目录与命令落在 `[build]` 段的 `frontend_*` 键上，但住处是 [Frontend]。 */

@@ -38,11 +38,17 @@ class TemplateGenerator {
         """
         |package ${settings.javaPackage};
         |
-        |import build.krema.core.api.app.KremaApp;
+        |import build.krema.core.Krema;
         |
         |public final class Main {
         |    public static void main(String[] args) {
-        |        KremaApp.start(args);
+        |        // 开发期读 KREMA_DEV_URL 指到使用方自己的前端 dev server；没设就用内建默认。
+        |        String devUrl = System.getenv("KREMA_DEV_URL");
+        |        Krema.app()
+        |            .title("${settings.appName}")
+        |            .devUrl(devUrl == null ? "http://localhost:5173" : devUrl)
+        |            .prodAssets("/assets")
+        |            .run();
         |    }
         |}
         |

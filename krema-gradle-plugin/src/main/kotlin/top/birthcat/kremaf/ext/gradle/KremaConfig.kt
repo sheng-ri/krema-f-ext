@@ -24,6 +24,7 @@ data class KremaConfig(
 data class Build(
     val outDir: String = "dist",
     val mainClass: String? = null,
+    val devUrl: String? = null,
 )
 
 /** 打包约定：图标与标识。 */

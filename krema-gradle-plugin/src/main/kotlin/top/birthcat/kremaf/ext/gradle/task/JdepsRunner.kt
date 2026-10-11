@@ -11,6 +11,14 @@ import java.io.ByteArrayOutputStream
 import java.nio.charset.Charset
 import java.nio.file.Path
 
+/** 从 jdeps 输出里取第一行非空（成功时即模块清单）。纯函数，便于单测解析。 */
+fun jdepsModulesFrom(text: String): String =
+    text
+        .lineSequence()
+        .map { it.trim() }
+        .firstOrNull { it.isNotEmpty() }
+        .orEmpty()
+
 /**
  * 一次 jdeps 调用的结果。
  *
@@ -23,12 +31,7 @@ internal class JdepsOutput(
     val bytes: ByteArray,
 ) {
     /** jdeps 成功时把模块清单打在第一行，取第一行非空。 */
-    fun firstLine(): String =
-        text
-            .lineSequence()
-            .map { it.trim() }
-            .firstOrNull { it.isNotEmpty() }
-            .orEmpty()
+    fun firstLine(): String = jdepsModulesFrom(text)
 }
 
 /**

@@ -32,6 +32,57 @@ const val ASSETS_DIR: String = "assets"
 // jar manifest 的约定路径，打包时先写一份，资源目录同名文件才不会被写第二遍。
 const val MANIFEST_PATH: String = "META-INF/MANIFEST.MF"
 
+// krema 产物根下 bundle（app-image）与 platform（各格式）两层的固定目录名，CI 上传规则照这个写死。
+const val BUNDLE_DIR_NAME: String = "bundle"
+
+/**
+ * 平台包产物目录名（相对 krema 产物根）：`platform/<format id>`。
+ *
+ * 与 [BundleFormat.id] 解耦拼写：改 id 即挪路径，这里只拼层级。单测核对路径可预测性。
+ */
+fun platformOutputDirName(formatId: String): String = "platform/$formatId"
+
+/**
+ * 解析宿主平台的图标路径。
+ *
+ * 三个按平台的扩展图标优先；都没配（或文件不存在）时才退到 `[bundle].icon`，并按宿主平台后缀
+ * （icns/ico/png）匹配 —— 对不上就跳过。都缺失则产物不带 `--icon`，不报错。
+ *
+ * 纯逻辑、不碰 Gradle 注入：单测能直接覆盖「笔误后缀被静默丢弃」「扩展图标文件不存在即跳过」两条。
+ *
+ * @param platform 宿主平台
+ * @param macIcon `macIcon` 扩展值（绝对路径），可能为 null
+ * @param windowsIcon `winIcon` 扩展值，可能为 null
+ * @param linuxIcon `linuxIcon` 扩展值，可能为 null
+ * @param tomlIcon `[bundle].icon` 解析出的路径，可能为 null
+ * @return 实际要喂给 jpackage `--icon` 的路径，没有合适的就返回 null
+ */
+fun resolveBundleIcon(
+    platform: Platform,
+    macIcon: Path?,
+    windowsIcon: Path?,
+    linuxIcon: Path?,
+    tomlIcon: Path?,
+): Path? {
+    val extIcon =
+        when (platform) {
+            Platform.DARWIN -> macIcon
+            Platform.WINDOWS -> windowsIcon
+            Platform.LINUX -> linuxIcon
+            Platform.UNKNOWN -> return null
+        }
+    // 扩展图标：配了但文件不存在也跳过，不当报错——图标资源缺失不该阻断整条打包。
+    if (extIcon != null && extIcon.toFile().exists()) return extIcon
+    // 兜底：toml 的图标按宿主平台后缀匹配；后缀对不上说明它本是为别的平台准备的，跳过而非报错。
+    if (tomlIcon != null &&
+        tomlIcon.toFile().exists() &&
+        tomlIcon.fileName.toString().endsWith(".${platform.iconSuffix()}", ignoreCase = true)
+    ) {
+        return tomlIcon
+    }
+    return null
+}
+
 // app jar 名，与 jpackage 的 `--main-jar` 对应；jpackage 会把它搬进 app-image 的 `lib/app`。
 fun appJarName(settings: BundleSettings): String = "${settings.appName}.jar"
 

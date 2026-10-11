@@ -67,20 +67,15 @@ enum class Platform {
             }
         }
     }
-}
 
-/**
- * bundle 的分发形态：对应两张打包 task，见 [top.birthcat.kremaf.ext.gradle.BundleForm]。
- */
-enum class BundleForm(
-    /** 进产物路径的稳定标识，与枚举名解耦。 */
-    val id: String,
-) {
-    /** 临时可运行的 bundle：jpackage 的 app-image 目录，供 `kremaBundleRun` 直接起。 */
-    BUNDLE("bundle"),
-
-    /** 平台包：本平台原生的可安装件，具体格式由 [BundleFormat] 选。 */
-    PLATFORM("platform"),
+    /** 图标文件后缀，按平台推断：`krema.toml` 的 `[bundle].icon` 按此后缀兜底匹配。 */
+    fun iconSuffix(): String =
+        when (this) {
+            DARWIN -> "icns"
+            WINDOWS -> "ico"
+            LINUX -> "png"
+            UNKNOWN -> error("无法为未知平台推断图标后缀：$this")
+        }
 }
 
 /** 当前平台的可执行文件后缀，Windows 上为 `.exe`。 */
@@ -94,9 +89,19 @@ internal fun executableSuffix(): String = if (File.separatorChar == '\\') ".exe"
  * 走 `cmd` 顺带把 `&&`、管道这些 shell 语法兑现给用户 —— 配置项本来的语义就是「一整行命令」。
  * 其余平台不套 shell：少一层进程，退出码与信号直达。
  */
-internal fun commandLineFor(command: String): List<String> {
+internal fun commandLineFor(command: String): List<String> = commandLineFor(command, PlatformDetector.detect())
+
+/**
+ * 把一行命令变成 argv，显式给定平台（便于单测 Windows 借道分支）。
+ *
+ * Windows 上借道 `cmd /c`：见 [commandLineFor] 的 why。
+ */
+internal fun commandLineFor(
+    command: String,
+    platform: Platform,
+): List<String> {
     val trimmed = command.trim()
-    return if (PlatformDetector.detect() == Platform.WINDOWS) {
+    return if (platform == Platform.WINDOWS) {
         listOf("cmd", "/c", trimmed)
     } else {
         trimmed.split(Regex("\\s+"))

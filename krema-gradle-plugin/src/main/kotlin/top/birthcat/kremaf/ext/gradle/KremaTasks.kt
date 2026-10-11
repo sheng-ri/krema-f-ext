@@ -8,24 +8,26 @@ import org.gradle.api.GradleException
 import org.gradle.api.JavaVersion
 import org.gradle.api.Project
 import org.gradle.api.file.Directory
-import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.provider.Provider
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
+import top.birthcat.kremaf.ext.gradle.BUNDLE_DIR_NAME
+import top.birthcat.kremaf.ext.gradle.appImageDirName
+import top.birthcat.kremaf.ext.gradle.kremaPlatformTaskName
+import top.birthcat.kremaf.ext.gradle.platformOutputDirName
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleRunTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
+import top.birthcat.kremaf.ext.gradle.task.KremaDevRunTask
 import top.birthcat.kremaf.ext.gradle.task.KremaFrontendBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaInitTask
 import top.birthcat.kremaf.ext.gradle.task.KremaJdepsModulesTask
 import top.birthcat.kremaf.ext.gradle.task.KremaJdepsModulesVerboseTask
+import top.birthcat.kremaf.ext.gradle.task.KremaPlatformTask
 import top.birthcat.kremaf.ext.gradle.task.KremaRuntimeImageTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerGenerateTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerSignTask
-
-/** 目标平台标识，形如 `linux-x86_64`。同时是便携包 zip 名里的 target 段，故只算一次。 */
-private val ZIP_TARGET: String = "${PlatformDetector.detect().name.lowercase()}-${PlatformDetector.getArch()}"
 
 internal fun Project.registerKremaTasks() {
     val ext = extensions.getByType(KremaExtension::class.java)
@@ -41,19 +43,12 @@ internal fun Project.registerKremaTasks() {
     }
 
     tasks.register(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java) { task ->
-        // 用户面向的前端构建 task：进 krema 分组，也出现在 KremaTaskNames.ALL（与 kremaBuild 一并构成公开 family）。
         task.group = KremaTaskNames.GROUP
         // 前端产物落在 krema.toml 的 out_dir（默认 dist/，相对项目根），也就是前端工具链自己的落点。
         // 插件只能按它去读：读 build/krema 下的目录等于读一个前端工具从不写的地方，prod 的 app jar 会空着 assets/。
         task.description = "Run the frontend production build (npm); output dir from krema.toml out_dir, declared as cacheable"
         task.configureProject(ext)
         // 前端命令：toml 的 frontend_* 是底，`krema.frontend { }` 里显式写的压过它。
-        // 之前只接了扩展那一侧，toml 里的 frontend_command 实际从没被读进来过 ——
-        // 默认值恰好相同，把这个洞盖住了。
-        //
-        // 用 flatMapIfPresent 而不是接两个 convention：Gradle 的 convention 只看这个 Property
-        // 自己有没有值，不是「前一个 convention 有没有值」，所以接第二个会把 toml 的兜底顶掉 ——
-        // 哪怕扩展那边压根没赋值。
         val tomlFrontend = providers.provider { kremaConfig(ext).frontend }
         task.buildCommand.convention(tomlFrontend.map { it.buildCommand })
         ext.frontend.buildCommand.orNull
@@ -132,15 +127,99 @@ internal fun Project.registerKremaTasks() {
         task.dependsOn(tasks.named("classes"))
     }
 
-    val bundleDir = registerBundle(KremaTaskNames.BUNDLE, BundleForm.BUNDLE, ext)
-    val platformDir = registerBundle(KremaTaskNames.BUNDLE_PLATFORM, BundleForm.PLATFORM, ext)
+    // 未压缩、可直接运行的 app-image：所有平台包的共同底座。
+    tasks.register(KremaTaskNames.BUNDLE, KremaBundleTask::class.java) { task ->
+        task.group = KremaTaskNames.GROUP
+        task.description = "Build a runnable, uncompressed app-image (build/krema/bundle) with the jlink-trimmed runtime"
+        task.configureProject(ext)
+        task.outputDir.convention(ext.outputDir.orElse(layout.buildDirectory.dir("krema")).map { it.dir(BUNDLE_DIR_NAME) })
+        task.appLibDir.convention(
+            tasks.named(KremaTaskNames.BUILD, KremaBuildTask::class.java).flatMap { it.outputDir.dir("lib") },
+        )
+        task.runtimeImageDir.set(
+            tasks
+                .named(KremaTaskNames.RUNTIME_IMAGE, KremaRuntimeImageTask::class.java)
+                .flatMap { it.runtimeImageDir },
+        )
+        task.jdkBinDir.set(jdkBinDir())
+        task.macIcon.set(ext.bundling.macIcon)
+        task.winIcon.set(ext.bundling.winIcon)
+        task.linuxIcon.set(ext.bundling.linuxIcon)
+        task.dependsOn(tasks.named(KremaTaskNames.BUILD))
+        task.dependsOn(tasks.named(KremaTaskNames.RUNTIME_IMAGE))
+    }
 
-    // run 起的是临时可运行的 app-image 本体（由 kremaBundle 产出），目录直接复用它算出的，不另拼路径：
-    // 便携 zip 已删，kremaBundle 只出 app-image，run 与它配套正好，不会像从前那样被便携包拖着打一份 zip。
+    // 按需注册平台包格式 task：只注册宿主平台配置了的那些，没配就一张都不出。
+    //
+    // 必须推迟到 afterEvaluate：用户的 `krema { bundling { } }` 块在插件 apply 之后才执行，
+    // 在 apply 里直接读 `formatsForHost()` 只会拿到空集合，于是平台包 task 一张都注册不出来。
+    afterEvaluate {
+        val hostFormats = ext.bundling.formatsForHost()
+        val platformTaskNames =
+            hostFormats.map { format ->
+                val name = kremaPlatformTaskName(format)
+                tasks.register(name, KremaPlatformTask::class.java) { task ->
+                    task.group = KremaTaskNames.GROUP
+                    task.description = "Build the ${format.id} platform package from the app-image (build/krema/platform/${format.id})"
+                    task.configureProject(ext)
+                    task.format.set(format)
+                    task.outputDir.convention(
+                        ext.outputDir.orElse(layout.buildDirectory.dir("krema")).map { it.dir(platformOutputDirName(format.id)) },
+                    )
+                    // app-image 目录 = kremaBundle 的 outputDir 下按宿主平台命名的子目录。
+                    //
+                    // 两段都不能在闭包里捕获不可序列化的对象：
+                    //  - 子目录名只在配置期由 appName + 平台算一次，存成 String，不在 provider 闭包里调
+                    //    `kremaConfig(ext)`（那是 Project 扩展，闭包捕获 Project 会让配置缓存序列化任务图时
+                    //    带上 DefaultProject，直接丢弃缓存）。
+                    //  - appImageDir 以 `tasks.named(BUNDLE)` 这个「按路径引用」的 task provider 为源，而不是直接
+                    //    捕获 bundleTask 这个 Task 对象：后者在闭包里捕获 KremaBundleTask，同样不可序列化。
+                    val appImageDirName =
+                        Platform.of(System.getProperty("os.name")).appImageDirName(kremaConfig(ext).packageName)
+                    task.appImageDir.convention(
+                        tasks
+                            .named(KremaTaskNames.BUNDLE, KremaBundleTask::class.java)
+                            .flatMap { it.outputDir }
+                            .map { it.dir(appImageDirName) },
+                    )
+                    task.jdkBinDir.set(jdkBinDir())
+                    task.appImageToolAutoDownload.convention(ext.bundling.appImageToolAutoDownload.orElse(true))
+                    task.macIcon.set(ext.bundling.macIcon)
+                    task.winIcon.set(ext.bundling.winIcon)
+                    task.linuxIcon.set(ext.bundling.linuxIcon)
+                    task.dependsOn(tasks.named(KremaTaskNames.BUNDLE))
+                }
+                name
+            }
+
+        // 平台包聚合 task：只把本平台配置了的各格式 task 串起来，本身不产文件；没配格式时无依赖、空跑成功。
+        tasks.register(KremaTaskNames.BUNDLE_PLATFORM) { task ->
+            task.group = KremaTaskNames.GROUP
+            task.description = "Aggregate the host platform's configured format packages (kremaPlatform<format>)"
+            platformTaskNames.forEach { task.dependsOn(tasks.named(it)) }
+        }
+    }
+
+    // 起 classpath 上的应用进程（开发期），注入 KREMA_DEV_URL。
+    tasks.register(KremaTaskNames.DEV_RUN, KremaDevRunTask::class.java) { task ->
+        task.configureProjectDevRun(ext)
+        // classpath 取「编译产物 + 运行期依赖」：source set 的运行时 classpath 才含项目自己的类，
+        // 光 runtimeClasspath 只会拿到依赖 jar、主类找不到（ClassNotFoundException）。
+        task.classpath = classpath.classesDirs + classpath.runtimeClasspath
+        // 主类在配置期就定死（不随执行变）：直接算成 String 设进 convention，不在 provider 闭包里调
+        // `task.resolvedMainClass()` —— 那会捕获 task 对象，配置缓存序列化任务图时同样不可序列化。
+        task.mainClass.convention(task.resolvedMainClass())
+        task.doFirst { task.environment("KREMA_DEV_URL", task.resolvedDevUrl()) }
+        // 干净仓库也要先编译：否则 classesDirs 还空着，起的进程照样找不到主类。
+        task.dependsOn(tasks.named("classes"))
+        // 不依赖 kremaBuild / kremaFrontendBuild：前端由使用方自己的 dev server 提供。
+    }
+
+    // 起 kremaBundle 打出的 app-image（产物验证 / 分发预览）。
     registerRun(
         KremaTaskNames.BUNDLE_RUN,
         KremaTaskNames.BUNDLE,
-        bundleDir,
+        tasks.named(KremaTaskNames.BUNDLE, KremaBundleTask::class.java).flatMap { it.outputDir },
         ext,
         cleanup,
     )
@@ -157,41 +236,6 @@ internal fun Project.registerKremaTasks() {
         task.description = "Sign artifacts with the private key"
         task.configureProject(ext)
     }
-}
-
-/** 注册一张打包 task，返回它的产物目录，供 run task 复用同一个 app-image 落点。 */
-private fun Project.registerBundle(
-    name: String,
-    form: BundleForm,
-    ext: KremaExtension,
-): Provider<Directory> {
-    val kremaRoot: Provider<Directory> = ext.outputDir.orElse(layout.buildDirectory.dir("krema"))
-    // 产物路径按「形态」固定成 build/krema/{bundle|platform}，CI 的上传规则照这个写死。
-    val bundleDir: Provider<Directory> = kremaRoot.map { it.dir(form.id) }
-
-    tasks.register(name, KremaBundleTask::class.java) { task ->
-        task.group = KremaTaskNames.GROUP
-        task.description = bundleDescription(form)
-        task.configureProject(ext)
-        task.outputDir.convention(bundleDir)
-        task.target.convention(currentTarget())
-        task.form.convention(form)
-        // 聚合产物（app jar + 依赖 jar + assets jar）由 kremaBuild 一次性聚好，打包只消费它。
-        task.appLibDir.convention(
-            tasks.named(KremaTaskNames.BUILD, KremaBuildTask::class.java).flatMap { it.outputDir.dir("lib") },
-        )
-        // app-image 自带 jlink 裁出的最小运行时，因此打包建立在编译、前端与运行时镜像三者之上。
-        task.runtimeImageDir.set(
-            tasks
-                .named(KremaTaskNames.RUNTIME_IMAGE, KremaRuntimeImageTask::class.java)
-                .flatMap { it.runtimeImageDir },
-        )
-        task.jdkBinDir.set(jdkBinDir())
-        task.dependsOn(tasks.named(KremaTaskNames.BUILD))
-        task.dependsOn(tasks.named(KremaTaskNames.RUNTIME_IMAGE))
-    }
-
-    return bundleDir
 }
 
 /**
@@ -218,7 +262,7 @@ private fun Project.kremaConfig(ext: KremaExtension): KremaConfig {
  */
 private fun Project.conventionFrontendDir(
     ext: KremaExtension,
-    target: DirectoryProperty,
+    target: org.gradle.api.file.DirectoryProperty,
 ) {
     // 键缺失时兜成 "."（即项目根自身），而不是在 provider 里判 null：provider 的泛型不带空性标注，
     // map 里判 null 会被当成恒假，而键缺失时它运行时确实是 null。兜在 provider 之外，空性就看得见。
@@ -226,16 +270,6 @@ private fun Project.conventionFrontendDir(
     target.convention(tomlDir.map { layout.projectDirectory.dir(it) })
     ext.frontend.dir.orNull
         ?.let { target.convention(layout.projectDirectory.dir(it)) }
-}
-
-private fun bundleDescription(form: BundleForm): String {
-    val formText =
-        if (form == BundleForm.BUNDLE) {
-            "runnable app-image folder (temporary local packaging)"
-        } else {
-            "platform app-image (distribution base)"
-        }
-    return "Build a $formText with the jlink-trimmed minimal runtime"
 }
 
 private fun Project.registerRun(
@@ -249,10 +283,9 @@ private fun Project.registerRun(
         task.group = KremaTaskNames.GROUP
         task.description = "Run the application (long-lived, not part of CI gating)"
         task.configureProject(ext)
-        // run 认的是 app-image 本体（由平台包产出，只出 app-image、不挂 zip 收尾），
-        // 目录直接取自那张打包 task，保证起的就是刚打出来的那份 app-image。
+        // run 认的是 app-image 本体（由 kremaBundle 产出），目录直接取自那张打包 task，保证起的就是刚打出来的那份 app-image。
         task.bundleDir.convention(bundleDir)
-        task.target.convention(currentTarget())
+        task.target.convention(hostTarget())
         task.cleanupService.set(cleanup)
         task.usesService(cleanup)
         // 先打包再起进程，找不到 bundle 时直接报错而不是凭空 launch。
@@ -260,7 +293,26 @@ private fun Project.registerRun(
     }
 }
 
-private fun currentTarget(): String = ZIP_TARGET
+private fun hostTarget(): String = "${PlatformDetector.detect().name.lowercase()}-${PlatformDetector.getArch()}"
+
+/** 给 `kremaDevRun` 接上 `krema.toml` 读取与主类 / devUrl 覆盖值。 */
+private fun KremaDevRunTask.configureProjectDevRun(ext: KremaExtension) {
+    configFilePath.convention(
+        ext.configFile.orElse(project.layout.projectDirectory.file("krema.toml")).map { it.asFile.absolutePath },
+    )
+    configFileSetExplicitly.convention(ext.configFile.isPresent)
+    configFilePresent.convention(
+        project.provider {
+            java.nio.file.Files
+                .exists(
+                    java.nio.file.Path
+                        .of(configFilePath.get()),
+                )
+        },
+    )
+    mainClassOverride.convention(ext.mainClass)
+    devUrlOverride.convention(ext.devUrl)
+}
 
 /** 编译所用 JDK 的 `bin` 目录：jlink、jdeps 与 jpackage 跟着编译用的 JDK 走，而不是跟着 PATH 走。 */
 private fun Project.jdkBinDir(): Provider<String> {
