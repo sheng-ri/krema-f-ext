@@ -18,11 +18,9 @@
 - 涉及 Gradle API（`org.gradle.api` / `org.gradle.api.tasks` / `org.gradle.kotlin.dsl`）的改动，动手前必须先装对应版本的 skill。
 
 ```bash
-npx skills add \
-  "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-api-9.8.0/-/@birthcat-dev/gradle-plugin-api-9.8.0-9.8.0.tgz" \
-  "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-tasks-9.8.0/-/@birthcat-dev/gradle-plugin-tasks-9.8.0-9.8.0.tgz" \
-  "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-kts-9.8.0/-/@birthcat-dev/gradle-kts-9.8.0-9.8.0.tgz" \
-  -g -a codebuddy -y
+npx skills add "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-api-9.8.0/-/@birthcat-dev/gradle-plugin-api-9.8.0-9.8.0.tgz" -g -a codebuddy -y
+npx skills add "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-tasks-9.8.0/-/@birthcat-dev/gradle-plugin-tasks-9.8.0-9.8.0.tgz" -g -a codebuddy -y
+npx skills add "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-kts-9.8.0/-/@birthcat-dev/gradle-kts-9.8.0-9.8.0.tgz" -g -a codebuddy -y
 ```
 
 ## 提交规范

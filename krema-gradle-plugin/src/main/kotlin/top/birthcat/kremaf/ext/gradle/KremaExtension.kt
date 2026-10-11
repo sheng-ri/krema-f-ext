@@ -17,8 +17,7 @@ import org.gradle.api.tasks.Internal
  * 这里只让用户**覆盖**，不给默认值 —— 默认值的唯一住所是 `krema.toml` 与 `Frontend()`。
  *
  * 前端输入收在 [frontend] 里而不是平铺：命令属于前端域，铺到顶层就会长出
- * `frontendCommand` / `frontendDevCommand` 一串前缀，且与 `krema.toml` 的 `[build]`
- * 键名对齐的需要靠前缀硬撑。
+ * `frontendCommand` 一串前缀，且与 `krema.toml` 的 `[build]` 键名对齐的需要靠前缀硬撑。
  */
 abstract class KremaExtension {
     /** 项目根目录下的 krema.toml。 */
@@ -37,6 +36,10 @@ abstract class KremaExtension {
     /** 平台包输入，由插件在 `apply` 时接上 `bundling { }` 块。 */
     @Internal
     lateinit var bundling: KremaBundlingExtension
+
+    /** 运行时镜像输入，由插件在 `apply` 时接上 `runtime { }` 块。 */
+    @Internal
+    lateinit var runtime: KremaRuntimeExtension
 }
 
 /**
@@ -49,6 +52,14 @@ abstract class KremaExtension {
  * Kotlin 赋值重载），也可以 `buildCommand.set(...)`。
  */
 abstract class KremaFrontendExtension {
+    /**
+     * 前端工程所在目录，相对项目根，覆盖 `krema.toml` 的 `[build].frontend_dir`；不写就是项目根。
+     *
+     * 取 `String` 而不是 `DirectoryProperty`：这一层与 toml 键接受的是同一个字面量，
+     * 「扩展压过 toml」才只是替换而不是翻译；而把它变成目录要 `layout`，那是注册期才有的东西。
+     */
+    abstract val dir: Property<String>
+
     /** 前端生产构建命令，覆盖 `krema.toml` 的 `[build].frontend_command`。 */
     abstract val buildCommand: Property<String>
 
@@ -59,12 +70,22 @@ abstract class KremaFrontendExtension {
      * 走哪个都行。不写就不装 —— 此时 `node_modules` 得由用户自己准备好。
      */
     abstract val installCommand: Property<String>
+}
 
-    /** 前端 dev 命令，覆盖 `krema.toml` 的 `[build].frontend_dev_command`。 */
-    abstract val devCommand: Property<String>
-
-    /** 前端 dev server 地址，覆盖 `krema.toml` 的 `[build].frontend_dev_url`。 */
-    abstract val devUrl: Property<String>
+/**
+ * `krema.runtime { }`。
+ *
+ * 运行时镜像要打进哪些 JDK 模块。不写就让 jdeps 按应用 classpath 推导 —— 推导不出来时（反射、
+ * 运行时才加载的类）才需要在这里显式补上。
+ */
+abstract class KremaRuntimeExtension {
+    /**
+     * 打进运行时镜像的 JDK 模块名，如 `java.base`。非空时**取代** jdeps 推导。
+     *
+     * 取代而不是追加：显式列清单的人是在对自己的 classpath 负责，把推导结果再叠上去等于把他删掉的
+     * 模块偷偷加回来，也让「这份清单最终裁出什么」无法一眼看清。
+     */
+    abstract val modules: SetProperty<String>
 }
 
 /**

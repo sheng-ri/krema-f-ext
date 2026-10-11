@@ -5,9 +5,7 @@ identifier = "com.example.kremademo"
 
 [build]
 main_class = "com.example.kremademo.Main"
-out_dir = "dist"
-frontend_command = "npm run build"
-frontend_install_command = "npm install"
-frontend_dev_command = "npm run dev"
-frontend_dev_url = "http://localhost:5173"
-assets_path = "web"
+frontend_dir = "front"
+out_dir = "front/dist"
+frontend_command = "pnpm run build"
+frontend_install_command = "pnpm install"

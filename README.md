@@ -44,9 +44,15 @@ krema {
 
     // 前端输入：这里填的值压过 krema.toml 的同名项，不填则以 toml 为准
     frontend {
+        // 前端工程目录，相对项目根；不写就是项目根
+        dir = "front"
         buildCommand = "npm run build"
-        devCommand = "npm run dev"
-        devUrl = "http://localhost:5173"
+    }
+
+    // 运行时镜像要打进哪些 JDK 模块。不写就让 jdeps 按应用 classpath 推导，
+    // 推导不出来时（反射、运行时才加载的类）才需要在这里显式补上
+    runtime {
+        modules = setOf("java.base", "java.desktop")
     }
 }
 ```
@@ -58,12 +64,14 @@ krema {
 | task | 对应上游 CLI | 做什么 |
 |---|---|---|
 | `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`），主类落在 `src/main/java` |
-| `kremaBuild` | build | 让 Gradle 编译主 source set，并跑前端生产构建（`frontend.buildCommand`），把 `dist` 作为可缓存、UP-TO-DATE 的产出收进 `build/krema` |
-| `kremaFrontendBuild` | — | 跑前端生产构建（`frontend.buildCommand`），产物目录取 `krema.toml` 的 `out_dir`（默认 `dist/`）声明成可缓存、UP-TO-DATE 的输出；被 `kremaBuild` 依赖，也可单独跑只重做前端 |
-| `kremaBundleDev` | bundle | dev 档打包：最小形态（macOS 才给正经 `.app`，其余平台靠 devUrl 拉前端），不打包 `dist`，产物落 `build/krema/dev` |
-| `kremaBundleProd` | bundle | prod 档打包：全平台出完整可分发形态，并把 `dist` 收进去，产物落 `build/krema/prod` |
-| `kremaBundleRunDev` | dev | 起前端 dev server 并跑 dev 档应用，长驻前台，中断时回收进程，不进 CI 门禁 |
-| `kremaBundleRunProd` | dev | 跑 prod 档应用，长驻前台，中断时回收进程，不进 CI 门禁 |
+| `kremaBuild` | build | 聚合后端与前端：让 Gradle 编译主 source set，跑前端生产构建（`frontend.buildCommand`），把后端 app jar 与独立的前端 assets jar 作为可缓存、UP-TO-DATE 的产出收进 `build/krema/lib` |
+| `kremaFrontendBuild` | — | 跑前端生产构建（`frontend.buildCommand`），产物目录取 `krema.toml` 的 `out_dir`（默认 `dist/`，落在前端目录下）声明成可缓存、UP-TO-DATE 的输出；被 `kremaBuild` 依赖，也可单独跑只重做前端 |
+| `kremaRuntimeImage` | — | 用 jdeps 推导模块、jlink 裁出最小运行时镜像，产物落 `build/krema/runtime`；`runtime.modules` 非空时改用你给的清单 |
+| `jdepsModules` | — | 打印 jdeps 推导出的运行时模块清单，不裁镜像。想手动指定模块前先跑它看清推导结果 |
+| `jdepsModulesVerbose` | — | 打印 `jdeps -v` 的逐包依赖明细，并把原始输出写到 `build/krema/jdeps-verbose.txt` 供事后分析 |
+| `kremaBundleDist` | bundle | 便携包：jpackage 产出的 app-image 目录外加一份 `<app>-<version>-<target>.zip`，产物落 `build/krema/dist` |
+| `kremaBundlePlatform` | bundle | 平台包：本平台原生的可安装件底座（各格式在别处接上），产物落 `build/krema/platform` |
+| `kremaBundleRun` | — | 跑应用，长驻前台，中断时回收进程，不进 CI 门禁 |
 | `kremaSignerGenerate` | signer generate | 生成一对签名密钥（Ed25519） |
 | `kremaSignerSign` | signer sign | 用私钥给产物签名 |
 

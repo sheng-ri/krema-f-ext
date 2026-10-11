@@ -19,12 +19,13 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.KremaProjectTask
+import top.birthcat.kremaf.ext.gradle.commandLineFor
 import javax.inject.Inject
 
 /**
  * 跑前端生产构建（npm 命令）并把 `dist` 落为声明式输出。
  *
- * 输入（`package.json` + 锁文件）与输出（`dist` 目录）都声明出来，因此能命中构建缓存，
+ * 输入（`package.json` + 锁文件）与输出（`dist` 目录）都在 [frontendDir] 下声明出来，因此能命中构建缓存，
  * 输入没变时第二次执行是 UP-TO-DATE。命令走 Gradle 自己的 [ExecOperations]，不另造执行口，
  * 失败时把命令自身的 stdout/stderr 一并抛给用户，省去猜是哪一步挂了。
  *
@@ -51,13 +52,13 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
     @get:Optional
     abstract val installCommand: Property<String>
 
-    /** 前端输入：项目根的 `package.json` 与存在的锁文件。缺失的候选不在集合里。 */
+    /** 前端输入：[frontendDir] 下的 `package.json` 与存在的锁文件。缺失的候选不在集合里。 */
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val frontendInputs: ConfigurableFileCollection
 
     /**
-     * 前端构建产物目录，取 `krema.toml` 的 `out_dir`（默认 `dist/`，相对项目根）。
+     * 前端构建产物目录，取 `krema.toml` 的 `out_dir`（默认 `dist/`，相对 [frontendDir]）。
      *
      * 就是前端工具链自己的落点：命令是用户给的，插件无权把它改道到别处，
      * 因此这里只声明这个目录为输出，不替用户决定它该落在哪。
@@ -70,6 +71,12 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
 
     @TaskAction
     fun build() {
+        // 前端目录不存在时报指名道姓的错：命令一旦执行失败只会得到 Gradle 通用信息
+        // （Windows 上是「Cannot run program "cmd"」），指不到 frontend_dir 这个配置项。
+        val front = frontendDir.get().asFile
+        if (!front.isDirectory) {
+            throw GradleException("前端目录不存在：$front（用 krema.frontend.dir 或 krema.toml 的 frontend_dir 配）")
+        }
         // 先装依赖再构建：删干净仓库后 node_modules 并不存在，直接构建会在「vite 找不到」这种
         // 与配置无关的地方炸掉。没配 installCommand 就跳过，那时用户自己负责把依赖准备好。
         installCommand.orNull?.let { install(it) }
@@ -82,11 +89,12 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
         command: String,
         label: String,
     ) {
+        val front = frontendDir.get().asFile
         val captured = java.io.ByteArrayOutputStream()
         val result =
             execOperations.exec { spec ->
-                spec.commandLine(command.trim().split(Regex("\\s+")))
-                spec.workingDir(projectDir.get().asFile)
+                spec.commandLine(commandLineFor(command))
+                spec.workingDir(front)
                 spec.isIgnoreExitValue = true
                 spec.standardOutput = captured
                 spec.errorOutput = captured

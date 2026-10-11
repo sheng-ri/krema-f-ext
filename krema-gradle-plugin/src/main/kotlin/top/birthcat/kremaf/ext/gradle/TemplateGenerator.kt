@@ -57,8 +57,6 @@ class TemplateGenerator {
         |
         |[build]
         |frontend_command = "npm run build"
-        |frontend_dev_command = "npm run dev"
-        |frontend_dev_url = "http://localhost:5173"
         |out_dir = "dist"
         |main_class = "${settings.javaPackage}.Main"
         |

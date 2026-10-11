@@ -8,6 +8,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.Input
@@ -24,8 +25,9 @@ import javax.inject.Inject
 /**
  * 用 jdeps 推导应用实际用到的模块，再用 jlink 裁出最小运行时镜像，供 jpackage 的 `--runtime-image` 使用。
  *
- * 模块列表在 action 里现算而不是配成输入：它完全由 [classpathFiles] 决定，多声明一份只会让
- * classpath 变动时算出两份互相矛盾的模块名。
+ * 模块清单有两条路：默认由 jdeps 按 [classpathFiles] 现算（推导结果**不**配成输入 —— 它完全由
+ * classpath 决定，多声明一份只会算出两份互相矛盾的模块名）；`krema { runtime { modules } }` 非空时
+ * [modules] 取代推导，作为覆盖值的唯一落点。
  *
  * 工具路径取自 JDK toolchain 而非 PATH：用户用别的 JDK 构建时，PATH 上的 jlink 可能根本不存在。
  */
@@ -39,6 +41,15 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
     @get:Classpath
     abstract val classpathFiles: ConfigurableFileCollection
 
+    /**
+     * 手动指定的模块清单，来自 `krema { runtime { modules } }`；非空时取代 jdeps 推导。
+     *
+     * 显式指定时 [classpathFiles] 变动仍会重跑 jlink：Gradle 没有「输入条件化」的手段，而按
+     * `modules.isEmpty()` 加 `onlyIf` 会让显式指定时 jlink 永不执行，正好把方向搞反。
+     */
+    @get:Input
+    abstract val modules: SetProperty<String>
+
     /** 运行时镜像目录，约定为 `outputDir/runtime`（即 `build/krema/runtime`）。 */
     @get:OutputDirectory
     abstract val runtimeImageDir: DirectoryProperty
@@ -48,10 +59,10 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
     abstract val jdkBinDir: Property<String>
 
     /**
-     * jdeps 的 `--multi-release` 版本，取编译用的 JDK 主版本号。
+     * jdeps 的 `--multi-release` 版本，取编译产物的目标字节码主版本号。
      *
-     * 跟 toolchain 走而不是写死：jlink 出的运行时就是 toolchain 那个版本，按别的版本号推导模块
-     * 会算出运行时里根本不存在的模块。
+     * 跟字节码目标走而不是跟 toolchain 走：jdeps 读的 class 是按目标版本编译出来的，多发行版 jar 的
+     * `META-INF/versions/N` 也要按同一档解析；两者可以不同，按别的版本号读会算出一份用不上的清单。
      */
     @get:Input
     abstract val multiRelease: Property<String>
@@ -62,45 +73,30 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
     @TaskAction
     fun createRuntimeImage() {
         val binDir = Path.of(jdkBinDir.get())
-        val modules = jdepsModules(binDir)
-        jlink(binDir, modules)
+        val explicit = modules.get()
+        // 排序后交给 jlink：SetProperty 的指纹对迭代顺序敏感，用户从 Map 派生集合时顺序可能变，
+        // 不排序会让同一份清单偶发地重跑 jlink。
+        val moduleList = if (explicit.isEmpty()) jdepsModules(binDir) else explicit.sorted().joinToString(",")
+        jlink(binDir, moduleList)
     }
 
     /** 取应用 classpath 依赖到的 JDK 模块，逗号分隔，形如 `java.base,java.desktop`。 */
     private fun jdepsModules(binDir: Path): String {
-        // jdeps 只认路径形式的输入：传 -cp 再给类名会报「路径不存在」并失败。
-        val paths = classpathFiles.files.filter { it.exists() }.map { it.absolutePath }
-        val captured = ByteArrayOutputStream()
-        val exit =
-            execOperations
-                .exec { spec ->
-                    // --multi-release 必须给，且必须与 toolchain 版本一致：jackson 这类依赖是
-                    // 多发行版 jar，不给这个选项 jdeps 直接拒读，模块推导就废了。
-                    spec.commandLine(
-                        listOf(
-                            tool(binDir, "jdeps"),
-                            "--print-module-deps",
-                            "--ignore-missing-deps",
-                            "--multi-release",
-                            multiRelease.get(),
-                        ) + paths,
-                    )
-                    spec.isIgnoreExitValue = true
-                    spec.standardOutput = captured
-                    spec.errorOutput = captured
-                }.exitValue
-        val modules =
-            captured
-                .toString()
-                .lineSequence()
-                .map { it.trim() }
-                .firstOrNull { it.isNotEmpty() }
-                .orEmpty()
-        if (exit != 0 || modules.isEmpty()) {
-            throw GradleException("推导运行时模块失败：\n$captured")
+        val out = jdepsRunner().run(verbose = false)
+        val modules = out.firstLine()
+        if (out.exitValue != 0 || modules.isEmpty()) {
+            throw GradleException("推导运行时模块失败：\n${out.text}")
         }
         return modules
     }
+
+    private fun jdepsRunner(): JdepsRunner =
+        JdepsRunner(
+            execOperations = execOperations,
+            binDir = Path.of(jdkBinDir.get()),
+            multiRelease = multiRelease.get(),
+            classpathFiles = classpathFiles,
+        )
 
     private fun jlink(
         binDir: Path,

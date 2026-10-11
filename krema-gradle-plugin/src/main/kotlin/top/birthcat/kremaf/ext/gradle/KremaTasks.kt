@@ -4,11 +4,13 @@
  */
 package top.birthcat.kremaf.ext.gradle
 
+import org.gradle.api.GradleException
+import org.gradle.api.JavaVersion
 import org.gradle.api.Project
 import org.gradle.api.file.Directory
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.provider.Provider
-import org.gradle.api.tasks.bundling.Zip
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
@@ -16,6 +18,8 @@ import top.birthcat.kremaf.ext.gradle.task.KremaBundleRunTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
 import top.birthcat.kremaf.ext.gradle.task.KremaFrontendBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaInitTask
+import top.birthcat.kremaf.ext.gradle.task.KremaJdepsModulesTask
+import top.birthcat.kremaf.ext.gradle.task.KremaJdepsModulesVerboseTask
 import top.birthcat.kremaf.ext.gradle.task.KremaRuntimeImageTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerGenerateTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerSignTask
@@ -31,7 +35,7 @@ internal fun Project.registerKremaTasks() {
 
     tasks.register(KremaTaskNames.INIT, KremaInitTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "生成 Krema 项目骨架（krema.toml + 主类）"
+        task.description = "Generate the Krema project scaffold (krema.toml + main class)"
         task.projectDir.convention(layout.projectDirectory)
         task.outputDir.convention(layout.projectDirectory)
     }
@@ -40,8 +44,8 @@ internal fun Project.registerKremaTasks() {
         // 用户面向的前端构建 task：进 krema 分组，也出现在 KremaTaskNames.ALL（与 kremaBuild 一并构成公开 family）。
         task.group = KremaTaskNames.GROUP
         // 前端产物落在 krema.toml 的 out_dir（默认 dist/，相对项目根），也就是前端工具链自己的落点。
-        // 插件只能按它去读：读 build/krema 下的目录等于读一个前端工具从不写的地方，prod 的 app jar 会空着 web/。
-        task.description = "跑前端生产构建（npm 命令），产物目录取自 krema.toml 的 out_dir 并声明成可缓存输出"
+        // 插件只能按它去读：读 build/krema 下的目录等于读一个前端工具从不写的地方，prod 的 app jar 会空着 assets/。
+        task.description = "Run the frontend production build (npm); output dir from krema.toml out_dir, declared as cacheable"
         task.configureProject(ext)
         // 前端命令：toml 的 frontend_* 是底，`krema.frontend { }` 里显式写的压过它。
         // 之前只接了扩展那一侧，toml 里的 frontend_command 实际从没被读进来过 ——
@@ -57,79 +61,100 @@ internal fun Project.registerKremaTasks() {
         task.installCommand.convention(tomlFrontend.map { it.installCommand })
         ext.frontend.installCommand.orNull
             ?.let { task.installCommand.convention(it) }
-        task.distDir.convention(
-            providers
-                .provider { kremaConfig(ext).build.outDir }
-                .map { layout.projectDirectory.dir(it) },
-        )
-        // 前端输入在项目根解析；哪些锁文件存在就收集哪些，缺失的候选自然不在集合里。
-        val projectDir = project.layout.projectDirectory
+        // 前端目录决定命令在哪跑、产物与输入在哪解析，都在这一层定下来；dist 落在它下面。
+        conventionFrontendDir(ext, task.frontendDir)
+        val tomlOutDir = providers.provider { kremaConfig(ext).build.outDir }
+        task.distDir.convention(task.frontendDir.flatMap { front -> tomlOutDir.map { front.dir(it) } })
+        // 前端输入在前端目录下解析；哪些锁文件存在就收集哪些，缺失的候选自然不在集合里。
         task.frontendInputs.from(
             listOf("package.json", "package-lock.json", "yarn.lock", "pnpm-lock.yaml")
-                .map { projectDir.file(it) },
+                .map { task.frontendDir.dir(it) },
         )
     }
 
+    // 后端编译产物 + 运行期依赖 classpath：kremaBuild 与运行时镜像/依赖分析共用同一份。
+    val classpath = kremaApplicationClasspath()
+
     tasks.register(KremaTaskNames.BUILD, KremaBuildTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "让 Gradle 编译主 source set，并把前端 dist 收进 build/krema"
+        task.description = "Assemble backend and frontend: build the app jar and a separate assets jar into lib/"
         task.configureProject(ext)
         // 编译交回 Gradle：kremaBuild 跑在 compileJava / processResources 之后。
         task.dependsOn(tasks.named("classes"))
         // 前端 dist 是 kremaBuild 的共用前置：声明成依赖后它才成为可缓存、UP-TO-DATE 的产出。
         task.dependsOn(tasks.named(KremaTaskNames.FRONTEND_BUILD))
+        // 后端 classpath：主类产出与资源目录（目录形态）+ 运行期依赖 jar（文件形态），都进 app jar。
+        task.classpathFiles.from(classpath.classesDirs)
+        task.classpathFiles.from(classpath.runtimeClasspath)
+        // 前端 dist 打进独立的 assets jar；dev/prod 不分区，整包始终带前端资源。
+        task.distFiles.from(
+            tasks.named(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java).map { it.distDir },
+        )
     }
-
-    // dev / prod 两张打包 task：都先跑 kremaBuild（编译 + 前端），dev 额外收最小形态、不打包 dist。
-    val classpath = kremaApplicationClasspath()
 
     tasks.register(KremaTaskNames.RUNTIME_IMAGE, KremaRuntimeImageTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "用 jdeps 推导模块、jlink 裁出最小运行时镜像（build/krema/runtime）"
+        task.description = "Derive modules via jdeps and trim a minimal runtime image with jlink (build/krema/runtime)"
         task.configureProject(ext)
         task.runtimeImageDir.convention(task.outputDir.dir("runtime"))
         task.jdkBinDir.set(jdkBinDir())
-        task.multiRelease.set(toolchainVersion())
+        task.multiRelease.set(targetBytecodeVersion())
         task.classpathFiles.from(classpath.classesDirs)
         task.classpathFiles.from(classpath.runtimeClasspath)
+        // 用 convention 而不是 set：扩展侧没写 modules 时 set(provider) 等于显式给一个无值 provider，
+        // 非 @Optional 的 @Input 会在校验期就报「没有值」，convention 兜不住这种情况。
+        task.modules.convention(ext.runtime.modules.orElse(emptySet()))
         // 模块推导读的是编译产出，镜像因此建立在 classes 之上。
         task.dependsOn(tasks.named("classes"))
     }
 
-    val distDevDir = registerBundle(KremaTaskNames.BUNDLE_DIST_DEV, BundleForm.DIST, dev = true, ext, classpath)
-    val distProdDir = registerBundle(KremaTaskNames.BUNDLE_DIST_PROD, BundleForm.DIST, dev = false, ext, classpath)
-    registerBundle(KremaTaskNames.BUNDLE_PLATFORM_DEV, BundleForm.PLATFORM, dev = true, ext, classpath)
-    registerBundle(KremaTaskNames.BUNDLE_PLATFORM_PROD, BundleForm.PLATFORM, dev = false, ext, classpath)
+    tasks.register(KremaTaskNames.JDEPS_MODULES, KremaJdepsModulesTask::class.java) { task ->
+        task.group = KremaTaskNames.GROUP
+        task.description = "Print the runtime module list derived from jdeps, without trimming an image"
+        task.jdkBinDir.set(jdkBinDir())
+        task.multiRelease.set(targetBytecodeVersion())
+        task.classpathFiles.from(classpath.classesDirs)
+        task.classpathFiles.from(classpath.runtimeClasspath)
+        // 不 dependsOn("classes") 的话 classesDirs 还不存在，模块推导会悄悄漏掉应用自己的代码。
+        task.dependsOn(tasks.named("classes"))
+    }
 
-    // run 调试的是便携包，故拿 dist 那两张的产物目录；直接复用打包 task 算出的目录，
-    // 不自己再拼一遍 `krema/dist/{tier}`——两处各拼一次，目录约定一改就会有一边悄悄指错。
+    tasks.register(KremaTaskNames.JDEPS_MODULES_VERBOSE, KremaJdepsModulesVerboseTask::class.java) { task ->
+        task.group = KremaTaskNames.GROUP
+        task.description = "Print per-package jdeps -v dependency details and write a report to build/krema/jdeps-verbose.txt"
+        task.jdkBinDir.set(jdkBinDir())
+        task.multiRelease.set(targetBytecodeVersion())
+        task.classpathFiles.from(classpath.classesDirs)
+        task.classpathFiles.from(classpath.runtimeClasspath)
+        task.reportFile.convention(
+            ext.outputDir.orElse(layout.buildDirectory.dir("krema")).map { it.file("jdeps-verbose.txt") },
+        )
+        task.dependsOn(tasks.named("classes"))
+    }
+
+    val bundleDir = registerBundle(KremaTaskNames.BUNDLE, BundleForm.BUNDLE, ext)
+    val platformDir = registerBundle(KremaTaskNames.BUNDLE_PLATFORM, BundleForm.PLATFORM, ext)
+
+    // run 起的是临时可运行的 app-image 本体（由 kremaBundle 产出），目录直接复用它算出的，不另拼路径：
+    // 便携 zip 已删，kremaBundle 只出 app-image，run 与它配套正好，不会像从前那样被便携包拖着打一份 zip。
     registerRun(
-        KremaTaskNames.BUNDLE_RUN_DEV,
-        KremaTaskNames.BUNDLE_DIST_DEV,
-        distDevDir,
-        dev = true,
-        ext,
-        cleanup,
-    )
-    registerRun(
-        KremaTaskNames.BUNDLE_RUN_PROD,
-        KremaTaskNames.BUNDLE_DIST_PROD,
-        distProdDir,
-        dev = false,
+        KremaTaskNames.BUNDLE_RUN,
+        KremaTaskNames.BUNDLE,
+        bundleDir,
         ext,
         cleanup,
     )
 
     tasks.register(KremaTaskNames.SIGNER_GENERATE, KremaSignerGenerateTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "生成一对签名密钥"
+        task.description = "Generate a signing key pair"
         task.configureProject(ext)
         task.privateKey.convention(task.outputDir.file("keys/krema.key"))
     }
 
     tasks.register(KremaTaskNames.SIGNER_SIGN, KremaSignerSignTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = "用私钥给产物签名"
+        task.description = "Sign artifacts with the private key"
         task.configureProject(ext)
     }
 }
@@ -138,34 +163,23 @@ internal fun Project.registerKremaTasks() {
 private fun Project.registerBundle(
     name: String,
     form: BundleForm,
-    dev: Boolean,
     ext: KremaExtension,
-    classpath: KremaApplicationClasspath,
 ): Provider<Directory> {
-    val tier = if (dev) "dev" else "prod"
     val kremaRoot: Provider<Directory> = ext.outputDir.orElse(layout.buildDirectory.dir("krema"))
-    // 产物路径按「形态 × 档位」固定成 build/krema/{dist|platform}/{dev|prod}，CI 的上传规则照这个写死。
-    val bundleDir: Provider<Directory> = kremaRoot.map { it.dir(form.id).dir(tier) }
+    // 产物路径按「形态」固定成 build/krema/{bundle|platform}，CI 的上传规则照这个写死。
+    val bundleDir: Provider<Directory> = kremaRoot.map { it.dir(form.id) }
 
     tasks.register(name, KremaBundleTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description = bundleDescription(form, dev)
+        task.description = bundleDescription(form)
         task.configureProject(ext)
         task.outputDir.convention(bundleDir)
         task.target.convention(currentTarget())
         task.form.convention(form)
-        task.dev.convention(dev)
-        // 应用 classpath 直接取主 source set 产出与运行期依赖：classesDirs 是编译产出目录，
-        // runtimeClasspath 含运行期依赖 jar 与（存在的）资源目录。
-        task.classpathFiles.from(classpath.classesDirs)
-        task.classpathFiles.from(classpath.runtimeClasspath)
-        if (dev) {
-            task.distFiles.setFrom(emptyList<Any>())
-        } else {
-            task.distFiles.from(
-                tasks.named(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java).map { it.distDir },
-            )
-        }
+        // 聚合产物（app jar + 依赖 jar + assets jar）由 kremaBuild 一次性聚好，打包只消费它。
+        task.appLibDir.convention(
+            tasks.named(KremaTaskNames.BUILD, KremaBuildTask::class.java).flatMap { it.outputDir.dir("lib") },
+        )
         // app-image 自带 jlink 裁出的最小运行时，因此打包建立在编译、前端与运行时镜像三者之上。
         task.runtimeImageDir.set(
             tasks
@@ -177,47 +191,7 @@ private fun Project.registerBundle(
         task.dependsOn(tasks.named(KremaTaskNames.RUNTIME_IMAGE))
     }
 
-    if (!form.zipped) return bundleDir
-    registerPortableZip(name, bundleDir, ext)
     return bundleDir
-}
-
-/**
- * 便携包 zip：把刚打出的 app-image 原样打包，解压即用。
- *
- * 用 Gradle 的 [Zip] 而不是自己拼 zip 字节 —— `copy { into("x.zip") }` 只会建出同名目录。
- * zip 由打包 task `finalizedBy` 而不是独立入口：先有 app-image 才谈得上打包，
- * 而 `Zip` 在源为空时会整张跳过，让它反过来依赖 app-image 产出即可。
- */
-private fun Project.registerPortableZip(
-    bundleTaskName: String,
-    bundleDir: Provider<Directory>,
-    ext: KremaExtension,
-) {
-    val zipName = "$bundleTaskName${KremaTaskNames.ZIP_SUFFIX}"
-    tasks.register(zipName, Zip::class.java) { task ->
-        // zip 是打包 task 的收尾，不进 krema 分组：用户面向的入口仍是那四张打包 task。
-        task.group = null
-        task.description = "把 app-image 打成便携包 zip"
-        task.archiveFileName.set(
-            providers
-                .provider { bundleNaming(ext) }
-                .map { "$it-$ZIP_TARGET.zip" },
-        )
-        task.destinationDirectory.set(bundleDir)
-        // 源目录与 zip 落地目录是同一个，Gradle 不会自动排掉产物本身：
-        // 不显式排除，zip 会先建出空壳再把它当输入收进去，用户解开多出一个坏掉的同名 zip。
-        val archiveFile = task.archiveFile
-        task.from(bundleDir) { spec -> spec.exclude { it.file == archiveFile.get().asFile } }
-        task.dependsOn(tasks.named(bundleTaskName))
-    }
-    tasks.named(bundleTaskName) { task -> task.finalizedBy(zipName) }
-}
-
-/** 便携包 zip 的文件名前缀 `<app>-<version>`：名字带版本，CI 才认得出该传哪一份。 */
-private fun Project.bundleNaming(ext: KremaExtension): String {
-    val config = kremaConfig(ext)
-    return "${config.packageName}-${config.version}"
 }
 
 /**
@@ -236,38 +210,49 @@ private fun Project.kremaConfig(ext: KremaExtension): KremaConfig {
     return KremaConfigLoader().loadOrDefault(toml)
 }
 
-private fun bundleDescription(
-    form: BundleForm,
-    dev: Boolean,
-): String {
-    val tier = if (dev) "dev 档" else "prod 档"
-    val formText = if (form == BundleForm.DIST) "便携包（app-image + zip）" else "平台包底座（app-image）"
-    return "生成$tier$formText，产物自带 jlink 裁出的最小运行时"
+/**
+ * 接上前端目录的两层取值：`krema.frontend.dir` 是覆盖值，`krema.toml` 的 `frontend_dir` 是底，都没写就是项目根。
+ *
+ * 后一次 [org.gradle.api.file.DirectoryProperty.convention] 顶掉前一次：Gradle 的 convention 只看这个
+ * Property 自己有没有值，所以「扩展侧没赋值」不能靠第二次 convention 表达 —— 与上面前端命令那几处同一形状。
+ */
+private fun Project.conventionFrontendDir(
+    ext: KremaExtension,
+    target: DirectoryProperty,
+) {
+    // 键缺失时兜成 "."（即项目根自身），而不是在 provider 里判 null：provider 的泛型不带空性标注，
+    // map 里判 null 会被当成恒假，而键缺失时它运行时确实是 null。兜在 provider 之外，空性就看得见。
+    val tomlDir = providers.provider { kremaConfig(ext).frontend.dir ?: "." }
+    target.convention(tomlDir.map { layout.projectDirectory.dir(it) })
+    ext.frontend.dir.orNull
+        ?.let { target.convention(layout.projectDirectory.dir(it)) }
+}
+
+private fun bundleDescription(form: BundleForm): String {
+    val formText =
+        if (form == BundleForm.BUNDLE) {
+            "runnable app-image folder (temporary local packaging)"
+        } else {
+            "platform app-image (distribution base)"
+        }
+    return "Build a $formText with the jlink-trimmed minimal runtime"
 }
 
 private fun Project.registerRun(
     name: String,
     bundleTask: String,
     bundleDir: Provider<Directory>,
-    dev: Boolean,
     ext: KremaExtension,
     cleanup: Provider<KremaProcessCleanupService>,
 ) {
     tasks.register(name, KremaBundleRunTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        task.description =
-            if (dev) {
-                "起前端 dev server 并跑 dev 档应用（长驻，不进 CI 门禁）"
-            } else {
-                "跑 prod 档应用（长驻，不进 CI 门禁）"
-            }
+        task.description = "Run the application (long-lived, not part of CI gating)"
         task.configureProject(ext)
-        // 便携包是唯一带启动器、跨档位通用的形态，run task 因此认它而不是平台包；
+        // run 认的是 app-image 本体（由平台包产出，只出 app-image、不挂 zip 收尾），
         // 目录直接取自那张打包 task，保证起的就是刚打出来的那份 app-image。
         task.bundleDir.convention(bundleDir)
         task.target.convention(currentTarget())
-        task.dev.convention(dev)
-        task.devCommand.convention(ext.frontend.devCommand)
         task.cleanupService.set(cleanup)
         task.usesService(cleanup)
         // 先打包再起进程，找不到 bundle 时直接报错而不是凭空 launch。
@@ -281,16 +266,37 @@ private fun currentTarget(): String = ZIP_TARGET
 private fun Project.jdkBinDir(): Provider<String> {
     val toolchains = extensions.getByType(JavaToolchainService::class.java)
     return toolchains
-        .launcherFor { spec -> spec.languageVersion.set(toolchainLanguageVersion()) }
-        .map {
+        .launcherFor { spec ->
+            // 不指定语言版本时 launcherFor 取当前 JVM，正是 Gradle 自己的默认行为。
+            spec.languageVersion.set(toolchainLanguageVersion())
+        }.map {
             it.metadata.installationPath
                 .dir("bin")
                 .asFile.absolutePath
         }
 }
 
+/** 编译所用 JDK 的版本：读 toolchain，没配就是空 —— 这时 `launcherFor` 自己会取当前 JVM。 */
 private fun Project.toolchainLanguageVersion(): Provider<JavaLanguageVersion> =
     extensions.getByType(JavaPluginExtension::class.java).toolchain.languageVersion
 
-/** toolchain 的主版本号，给 jdeps 的 `--multi-release` 用。 */
-private fun Project.toolchainVersion(): Provider<String> = toolchainLanguageVersion().map { it.toString() }
+/**
+ * 编译产物的目标字节码主版本号，给 jdeps 的 `--multi-release` 用。
+ *
+ * 取字节码目标而不是 toolchain：jdeps 拿到的 class 是按目标版本编译出来的，`--multi-release` 要与
+ * 它们对齐。toolchain 只说明「用哪个 JDK 编」，两者可以不同（拿 JDK 25 编出目标 17 的产物是常事），
+ * 对着 25 去读 17 字节码的 MR-jar 会算出一份用不上的模块清单。
+ *
+ * 走 `targetCompatibility` 而不是 toolchain：它没配时 Gradle 就取当前 JVM，且配了 toolchain 时
+ * 自动跟着 toolchain 走 —— 默认值与「跟着编译走」这两条都成立，而直接读 toolchain 只满足后者，
+ * 会在没配 toolchain 的工程里拿不到值，把一条本该有默认值的输入变成硬前置。
+ */
+private fun Project.targetBytecodeVersion(): Provider<String> =
+    providers.provider {
+        val target = extensions.getByType(JavaPluginExtension::class.java).targetCompatibility
+        // jdeps 只接受 9 及以上（更低的版本号它直接报「选项的参数无效」），而模块化本身也是 9 起的概念。
+        if (target < JavaVersion.VERSION_1_9) {
+            throw GradleException("目标字节码 $target 低于 9，推导不出 JDK 模块；请把 targetCompatibility 提到 9 及以上")
+        }
+        target.majorVersion
+    }

@@ -28,6 +28,18 @@ abstract class KremaConfigTask : DefaultTask() {
     abstract val projectDir: DirectoryProperty
 
     /**
+     * 前端工程目录：`package.json`、锁文件与 `dist` 的解析基准，也是前端命令的工作目录。
+     *
+     * 与 [projectDir] 分开是因为后者是 `krema.toml` 与图标的解析基准，两者的目录并不总是同一个。
+     *
+     * 标 [Internal] 不标 `@InputDirectory`：后者会让 Gradle 哈希整个前端目录（含 `node_modules`，
+     * 几万文件、每次 install 都变），up-to-date 与构建缓存全废。失效仍会正确发生 —— 本目录的移动
+     * 改的是 `@OutputDirectory` 的位置，输出位置变了就不可能还是 UP-TO-DATE。
+     */
+    @get:Internal
+    abstract val frontendDir: DirectoryProperty
+
+    /**
      * `krema.toml` 的绝对路径。
      *
      * 暴露成 `String` 而不是 `RegularFileProperty`：`@InputFile` 会在 task action 之前先报
@@ -85,7 +97,6 @@ abstract class KremaConfigTask : DefaultTask() {
             mainClass = config.build.mainClass ?: "${config.identifier}.Main",
             icon = config.bundle.icon?.let(dir::resolve),
             deepLinkSchemes = config.deepLinkSchemes,
-            assetsPath = config.build.assetsPath,
         )
     }
 }

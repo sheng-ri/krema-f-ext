@@ -48,18 +48,14 @@ class KremaConfigLoader {
         Build(
             outDir = toml?.getString("out_dir", "dist") ?: "dist",
             mainClass = toml?.getString("main_class"),
-            assetsPath = toml?.getString("assets_path", "web") ?: "web",
         )
 
-    /** 前端命令落在 `[build]` 段的 `frontend_*` 键上，但住处是 [Frontend]。 */
+    /** 前端目录与命令落在 `[build]` 段的 `frontend_*` 键上，但住处是 [Frontend]。 */
     private fun fromFrontend(toml: Toml?): Frontend =
         Frontend(
+            dir = toml?.getString("frontend_dir"),
             buildCommand = toml?.getString("frontend_command", "npm run build") ?: "npm run build",
             installCommand = toml?.getString("frontend_install_command"),
-            devCommand = toml?.getString("frontend_dev_command", "npm run dev") ?: "npm run dev",
-            devUrl =
-                toml?.getString("frontend_dev_url", "http://localhost:5173")
-                    ?: "http://localhost:5173",
         )
 
     private fun fromBundle(toml: Toml?): Bundle =
