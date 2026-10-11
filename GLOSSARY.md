@@ -9,22 +9,14 @@ Gradle 构建脚本里唯一的 Krema 配置入口。所有构建输入（含配
 _Avoid_: krema.toml（不再是配置源，只在 `krema` 块显式指定路径时作为默认值来源）、命令行开关
 
 **bundle**:
-一个自带最小运行时的可分发产物。只有一个维度：**分发形态**（便携包 / 平台包），对应两张 task。
-bundle 是构建的产物，不是「发行时才走」的一个步骤。
-_Avoid_: 包、安装包、package
+`kremaBundle` 的产出：一个自带最小运行时、**未压缩、可直接运行**的 app-image 目录。它是后续所有平台包的共同底座，
+本身不是分发给用户装的东西。
+_Avoid_: 包、安装包、package、便携包（zip 形态已不存在）
 
-**分发形态**:
-bundle 的形态维度，只有两种：**便携包**（dist，跨平台统一的 zip）与**平台包**（platform，本平台原生的可安装件）。
-_Avoid_: 档位、variant
-
-**便携包**（dist）:
-不分平台的分发形态：jpackage 产出的 app-image 目录，外加一份 `<app>-<version>-<target>.zip`。解压即用，不需安装。
-_Avoid_: 免安装版、portable（与「便携包」同义，但中英混排时统一用中文术语）
-
-**平台包**（platform）:
+**平台包**:
 本平台原生的可安装件，由 `BundleFormat` 枚举配置要出哪些：macOS 出 `.app`/`.dmg`/`.pkg`，Windows 出 `.exe`/`.msi`，
-Linux 出 `.AppImage`/`.deb`/`.rpm`。列表可空——空即本平台不出平台包。
-_Avoid_: 安装包（泛称，不区分形态）、native 包
+Linux 出 `.AppImage`/`.deb`/`.rpm`。配了几个格式就注册几张 `kremaPlatform<格式>` task，列表为空即不出平台包。
+_Avoid_: 安装包（泛称，不区分形态）、native 包、分发形态（该维度已删除）
 
 **运行时镜像**（runtime image）:
 一份最小化的 Java 运行时，由 jlink 从应用实际用到的模块裁出，随 bundle 分发。使用方机器无需预装 JDK。
@@ -56,5 +48,6 @@ _Avoid_: 前端资产（jar 里的落点）、dist 目录（只是前端目录�
 _Avoid_: 后端
 
 **dev server 进程**:
-前端热更新服务的进程。与应用进程是两个独立进程；开发态下通常由使用方自行起停，与打包分发无关。
+前端热更新服务的进程。与应用进程是两个独立进程，**由使用方自己起停**——插件不托管它，也不为它提供 task。
+`kremaDevRun` 只把它的地址作为环境变量交给应用进程，用不用由应用代码决定。
 _Avoid_: 前端（指进程时）
