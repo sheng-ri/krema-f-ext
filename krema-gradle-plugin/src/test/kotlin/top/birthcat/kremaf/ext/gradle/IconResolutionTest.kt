@@ -8,6 +8,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
+import top.birthcat.kremaf.ext.gradle.domain.Platform
 import java.nio.file.Files
 import java.nio.file.Path
 

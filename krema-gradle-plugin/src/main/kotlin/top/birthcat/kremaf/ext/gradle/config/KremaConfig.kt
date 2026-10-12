@@ -2,7 +2,7 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle
+package top.birthcat.kremaf.ext.gradle.config
 
 /**
  * `krema.toml` 的解析结果，不保留 TOML 库类型。

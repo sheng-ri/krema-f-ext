@@ -2,8 +2,9 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle
+package top.birthcat.kremaf.ext.gradle.config
 
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -21,7 +22,8 @@ class DotEnvLoader {
      */
     fun load(projectDir: Path): Map<String, String> {
         val vars = LinkedHashMap<String, String>()
-        FileOps.readText(projectDir.resolve(".env"))?.let { parseInto(it, vars) }
+        val envPath = projectDir.resolve(".env")
+        if (Files.isRegularFile(envPath)) parseInto(Files.readString(envPath), vars)
         return vars
     }
 

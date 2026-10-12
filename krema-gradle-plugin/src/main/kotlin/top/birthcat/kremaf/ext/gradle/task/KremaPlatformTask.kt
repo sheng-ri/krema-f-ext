@@ -8,20 +8,19 @@ import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
-import org.gradle.work.DisableCachingByDefault
-import top.birthcat.kremaf.ext.gradle.AppImageTool
-import top.birthcat.kremaf.ext.gradle.BundleFormat
-import top.birthcat.kremaf.ext.gradle.BundleSettings
-import top.birthcat.kremaf.ext.gradle.KremaProjectTask
-import top.birthcat.kremaf.ext.gradle.Platform
-import top.birthcat.kremaf.ext.gradle.appImageDirName
-import top.birthcat.kremaf.ext.gradle.executableSuffix
-import top.birthcat.kremaf.ext.gradle.resolveBundleIcon
+import top.birthcat.kremaf.ext.gradle.config.BundleSettings
+import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
+import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
+import top.birthcat.kremaf.ext.gradle.domain.Platform
+import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
+import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
+import top.birthcat.kremaf.ext.gradle.tool.AppImageTool
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -34,7 +33,7 @@ import javax.inject.Inject
  * 落进 `build/krema/platform/<format id>`：jpackage 安装器走 `--app-image` 复用，AppImage 走外部
  * `appimagetool`。不再从 `--input lib` 把 jpackage 重跑一遍。
  */
-@DisableCachingByDefault(because = "平台包按宿主平台与本机 JDK 落盘，不做跨机器复用")
+@CacheableTask
 abstract class KremaPlatformTask : KremaProjectTask() {
     /** 本格式。 */
     @get:Input

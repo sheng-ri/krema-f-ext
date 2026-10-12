@@ -18,8 +18,7 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
-import top.birthcat.kremaf.ext.gradle.KremaProjectTask
-import top.birthcat.kremaf.ext.gradle.commandLineFor
+import top.birthcat.kremaf.ext.gradle.domain.commandLineFor
 import javax.inject.Inject
 
 /**

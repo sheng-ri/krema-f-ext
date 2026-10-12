@@ -7,6 +7,8 @@ package top.birthcat.kremaf.ext.gradle
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import top.birthcat.kremaf.ext.gradle.config.BUNDLE_DIR_NAME
+import top.birthcat.kremaf.ext.gradle.config.platformOutputDirName
 
 /** 产物路径换算：bundle 与 platform/<id> 可预测，上传规则能写死。 */
 class PlatformPathTest {

@@ -7,9 +7,9 @@ package top.birthcat.kremaf.ext.gradle.task
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
-import top.birthcat.kremaf.ext.gradle.KremaConfig
-import top.birthcat.kremaf.ext.gradle.KremaConfigLoader
 import top.birthcat.kremaf.ext.gradle.KremaTaskNames
+import top.birthcat.kremaf.ext.gradle.config.KremaConfig
+import top.birthcat.kremaf.ext.gradle.config.KremaConfigLoader
 import java.nio.file.Path
 
 /**

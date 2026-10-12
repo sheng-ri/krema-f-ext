@@ -16,8 +16,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
-import top.birthcat.kremaf.ext.gradle.KremaProjectTask
-import top.birthcat.kremaf.ext.gradle.executableSuffix
+import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
 import java.io.ByteArrayOutputStream
 import java.nio.file.Path
 import javax.inject.Inject

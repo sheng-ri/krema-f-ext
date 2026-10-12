@@ -5,16 +5,15 @@
 package top.birthcat.kremaf.ext.gradle.task
 
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.TaskAction
-import org.gradle.work.DisableCachingByDefault
-import top.birthcat.kremaf.ext.gradle.ASSETS_DIR
-import top.birthcat.kremaf.ext.gradle.BundleSettings
-import top.birthcat.kremaf.ext.gradle.KremaProjectTask
-import top.birthcat.kremaf.ext.gradle.MANIFEST_PATH
-import top.birthcat.kremaf.ext.gradle.appJarName
-import top.birthcat.kremaf.ext.gradle.assetsJarName
+import top.birthcat.kremaf.ext.gradle.config.ASSETS_DIR
+import top.birthcat.kremaf.ext.gradle.config.BundleSettings
+import top.birthcat.kremaf.ext.gradle.config.MANIFEST_PATH
+import top.birthcat.kremaf.ext.gradle.config.appJarName
+import top.birthcat.kremaf.ext.gradle.config.assetsJarName
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -30,7 +29,7 @@ import java.util.jar.Manifest
  * 两个 jar 都落到 `lib/` 下，bundle task 直接拿这个目录去 jpackage。前端是「整个应用」的资源，
  * 故与后端一起在这一层聚合，而不是塞进 bundle 的打包逻辑里——bundle 只管最终平台分发。
  */
-@DisableCachingByDefault(because = "聚合产物按本机 classpath 落盘，不做跨机器复用")
+@CacheableTask
 abstract class KremaBuildTask : KremaProjectTask() {
     /** 应用 classpath：目录形态的是主类产出与资源目录，文件形态的是运行期依赖 jar，都进 app-image。 */
     @get:Classpath

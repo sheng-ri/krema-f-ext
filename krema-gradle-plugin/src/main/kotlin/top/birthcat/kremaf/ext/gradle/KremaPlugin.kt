@@ -7,6 +7,10 @@ package top.birthcat.kremaf.ext.gradle
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPlugin
+import top.birthcat.kremaf.ext.gradle.config.KremaBundlingExtension
+import top.birthcat.kremaf.ext.gradle.config.KremaExtension
+import top.birthcat.kremaf.ext.gradle.config.KremaFrontendExtension
+import top.birthcat.kremaf.ext.gradle.config.KremaRuntimeExtension
 
 /** 薄壳插件：注册 `krema` 扩展与 task 组。 */
 class KremaPlugin : Plugin<Project> {

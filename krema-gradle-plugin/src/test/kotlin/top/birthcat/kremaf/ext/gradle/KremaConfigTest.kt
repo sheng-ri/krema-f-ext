@@ -7,6 +7,7 @@ package top.birthcat.kremaf.ext.gradle
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import top.birthcat.kremaf.ext.gradle.config.KremaConfigLoader
 import java.nio.file.Files
 
 /** `krema.toml` 解析与缺省：不依赖 Gradle 注入的纯逻辑。 */

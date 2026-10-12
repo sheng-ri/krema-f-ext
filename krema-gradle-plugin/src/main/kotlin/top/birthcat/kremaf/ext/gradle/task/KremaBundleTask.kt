@@ -8,19 +8,18 @@ import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
-import org.gradle.work.DisableCachingByDefault
-import top.birthcat.kremaf.ext.gradle.BundleSettings
-import top.birthcat.kremaf.ext.gradle.KremaProjectTask
-import top.birthcat.kremaf.ext.gradle.Platform
-import top.birthcat.kremaf.ext.gradle.appImageDirName
-import top.birthcat.kremaf.ext.gradle.appJarName
-import top.birthcat.kremaf.ext.gradle.executableSuffix
-import top.birthcat.kremaf.ext.gradle.resolveBundleIcon
+import top.birthcat.kremaf.ext.gradle.config.BundleSettings
+import top.birthcat.kremaf.ext.gradle.config.appJarName
+import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
+import top.birthcat.kremaf.ext.gradle.domain.Platform
+import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
+import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -32,7 +31,7 @@ import javax.inject.Inject
  * 这是所有平台包的共同底座：平台格式 task 复用这份 app-image，不再从 `--input lib` 重打一遍。
  * 前端资源与后端聚合都在 `kremaBuild` 完成，这里只做平台打包，不碰任何资源。
  */
-@DisableCachingByDefault(because = "jpackage 产物按宿主平台与本机 JDK 落盘，不做跨机器复用")
+@CacheableTask
 abstract class KremaBundleTask : KremaProjectTask() {
     /** `kremaBuild` 聚好的 `lib/` 目录：app jar + 依赖 jar + assets jar。 */
     @get:InputDirectory

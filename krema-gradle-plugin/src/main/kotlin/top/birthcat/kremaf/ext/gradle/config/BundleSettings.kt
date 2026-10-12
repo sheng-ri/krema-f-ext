@@ -2,8 +2,10 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle
+package top.birthcat.kremaf.ext.gradle.config
 
+import top.birthcat.kremaf.ext.gradle.domain.Platform
+import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
 import java.nio.file.Path
 
 // 打包输入：产物名、图标、深链，以及前端产物在 app jar classpath 上的落点。

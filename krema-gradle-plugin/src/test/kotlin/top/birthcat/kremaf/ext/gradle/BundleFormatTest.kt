@@ -7,6 +7,8 @@ package top.birthcat.kremaf.ext.gradle
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
+import top.birthcat.kremaf.ext.gradle.domain.kremaPlatformTaskName
 
 /** `BundleFormat` 的 producer 与图标后缀映射：决定工具选择，不应按平台写分支。 */
 class BundleFormatTest {

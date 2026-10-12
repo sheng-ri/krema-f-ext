@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle
 
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -28,10 +29,18 @@ class TemplateGenerator {
     ): Path {
         val packagePath = settings.javaPackage.replace('.', '/')
         // 主类落在 Gradle 认得的标准主 source set，不造 src-java 这类约定目录。
-        FileOps.writeText(dir.resolve("src/main/java/$packagePath/Main.java"), mainClass(settings))
-        FileOps.writeText(dir.resolve("krema.toml"), kremaToml(settings))
-        FileOps.writeText(dir.resolve(".gitignore"), GITIGNORE)
+        writeText(dir.resolve("src/main/java/$packagePath/Main.java"), mainClass(settings))
+        writeText(dir.resolve("krema.toml"), kremaToml(settings))
+        writeText(dir.resolve(".gitignore"), GITIGNORE)
         return dir
+    }
+
+    private fun writeText(
+        path: Path,
+        content: String,
+    ) {
+        path.parent?.let { Files.createDirectories(it) }
+        Files.writeString(path, content)
     }
 
     private fun mainClass(settings: InitSettings) =

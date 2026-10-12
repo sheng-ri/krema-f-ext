@@ -6,7 +6,7 @@ package top.birthcat.kremaf.ext.gradle.task
 
 import org.gradle.api.file.FileCollection
 import org.gradle.process.ExecOperations
-import top.birthcat.kremaf.ext.gradle.executableSuffix
+import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
 import java.io.ByteArrayOutputStream
 import java.nio.charset.Charset
 import java.nio.file.Path

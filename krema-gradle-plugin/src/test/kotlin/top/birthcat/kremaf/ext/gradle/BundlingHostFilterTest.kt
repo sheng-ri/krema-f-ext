@@ -7,6 +7,9 @@ package top.birthcat.kremaf.ext.gradle
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import top.birthcat.kremaf.ext.gradle.config.selectHostFormats
+import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
+import top.birthcat.kremaf.ext.gradle.domain.Platform
 
 /** 宿主平台筛选：跨平台写的格式列表只留宿主子集，笔误格式被静默丢弃。 */
 class BundlingHostFilterTest {

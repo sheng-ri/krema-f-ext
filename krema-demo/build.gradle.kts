@@ -1,4 +1,4 @@
-import top.birthcat.kremaf.ext.gradle.BundleFormat
+import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
 
 plugins {
     alias(libs.plugins.kotlin.jvm)

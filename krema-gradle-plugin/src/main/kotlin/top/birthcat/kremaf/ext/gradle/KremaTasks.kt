@@ -12,10 +12,15 @@ import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.provider.Provider
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
-import top.birthcat.kremaf.ext.gradle.BUNDLE_DIR_NAME
-import top.birthcat.kremaf.ext.gradle.appImageDirName
-import top.birthcat.kremaf.ext.gradle.kremaPlatformTaskName
-import top.birthcat.kremaf.ext.gradle.platformOutputDirName
+import top.birthcat.kremaf.ext.gradle.config.BUNDLE_DIR_NAME
+import top.birthcat.kremaf.ext.gradle.config.KremaConfig
+import top.birthcat.kremaf.ext.gradle.config.KremaConfigLoader
+import top.birthcat.kremaf.ext.gradle.config.KremaExtension
+import top.birthcat.kremaf.ext.gradle.config.platformOutputDirName
+import top.birthcat.kremaf.ext.gradle.domain.Platform
+import top.birthcat.kremaf.ext.gradle.domain.PlatformDetector
+import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
+import top.birthcat.kremaf.ext.gradle.domain.kremaPlatformTaskName
 import top.birthcat.kremaf.ext.gradle.task.KremaBuildTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleRunTask
 import top.birthcat.kremaf.ext.gradle.task.KremaBundleTask
@@ -28,6 +33,8 @@ import top.birthcat.kremaf.ext.gradle.task.KremaPlatformTask
 import top.birthcat.kremaf.ext.gradle.task.KremaRuntimeImageTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerGenerateTask
 import top.birthcat.kremaf.ext.gradle.task.KremaSignerSignTask
+import top.birthcat.kremaf.ext.gradle.task.configureProject
+import top.birthcat.kremaf.ext.gradle.task.kremaApplicationClasspath
 
 internal fun Project.registerKremaTasks() {
     val ext = extensions.getByType(KremaExtension::class.java)

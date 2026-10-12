@@ -10,9 +10,8 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
-import top.birthcat.kremaf.ext.gradle.KremaConfigTask
 import top.birthcat.kremaf.ext.gradle.KremaProcessCleanupService
-import top.birthcat.kremaf.ext.gradle.PlatformBundler
+import top.birthcat.kremaf.ext.gradle.config.PlatformBundler
 import java.util.concurrent.TimeUnit
 
 /**
