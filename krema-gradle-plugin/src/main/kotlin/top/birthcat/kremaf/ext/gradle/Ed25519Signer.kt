@@ -2,9 +2,8 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.spi.iml.nativeimpl
+package top.birthcat.kremaf.ext.gradle
 
-import top.birthcat.kremaf.ext.spi.port.Signer
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.KeyPairGenerator
@@ -12,15 +11,15 @@ import java.security.Signature
 import java.util.Base64
 
 /**
- * [Signer] 的纯 JVM 实现。
+ * 签名密钥对的生成与签名。
  *
  * 用 Ed25519：JDK 15 起内置，无需 BouncyCastle，密钥长度恒定，适合整段塞进 `krema.toml` 的 `updater` 段。
  * 私钥、公钥都以 PKCS#8 / X.509 的 Base64 文本落盘，`----` 包装与上游的 PEM 观感一致。
  */
-class NioSigner : Signer {
-    override fun generate(
+class Ed25519Signer {
+    fun generate(
         privateKey: Path,
-        publicKey: Path?,
+        publicKey: Path? = null,
     ): Path {
         val pair = KeyPairGenerator.getInstance(ALGORITHM).generateKeyPair()
         writePem(privateKey, "PRIVATE KEY", pair.private.encoded)
@@ -29,7 +28,7 @@ class NioSigner : Signer {
         return privateKey
     }
 
-    override fun sign(
+    fun sign(
         artifact: Path,
         privateKey: Path,
         signature: Path,

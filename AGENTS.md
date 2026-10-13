@@ -11,6 +11,7 @@
 - 注释只写在 public API 上：对外库暴露的 API、模块之间的交互 API。内部实现省略注释。
 - 不用注释复述代码。注释解释「为什么」，不解释「是什么」。
 - 提交前 `./gradlew spotlessCheck` 必须干净。
+- 测试方法名必须 ≤30 字符；每个 `@Test` 方法必须加 `@DisplayName` 标注中文名。
 
 ## 外部 skill
 
@@ -27,3 +28,13 @@ npx skills add \
 ## 提交规范
 
 - pr最终合并的commit遵循`[chore,ref,feat,fix]:` 开头, 末尾引用issue结尾。例: `feat: 一个功能 (#1)`
+
+## Agent skills
+
+### Issue tracker
+
+- Issue 与 spec 都放在本仓库的 CNB Issues，一律用 `cnb` CLI 操作（不是 `gh`）。见 `docs/agents/issue-tracker.md`。
+
+### Domain docs
+
+- single-context：根级 `GLOSSARY.md`，不用 ADR。见 `docs/agents/domain.md`。

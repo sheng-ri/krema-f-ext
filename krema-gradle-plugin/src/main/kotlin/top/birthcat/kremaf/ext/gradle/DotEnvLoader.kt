@@ -2,37 +2,26 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.spi.iml.delegate
+package top.birthcat.kremaf.ext.gradle
 
-import top.birthcat.kremaf.ext.spi.port.FileSystem
 import java.nio.file.Path
 
 /**
  * `.env` 读取。
  *
  * 自研：解析规则对齐上游 `krema-cli` 的 `DotEnvLoader`（该模块不发制品）——
- * 跳过空行与 `#` 注释，只在第一个 `=` 处切分，剥掉成对的引号，`.env.<profile>` 覆盖 `.env`。
- * 不可读的文件静默跳过。
+ * 跳过空行与 `#` 注释，只在第一个 `=` 处切分，剥掉成对的引号。不可读的文件静默跳过。
  */
-class DotEnvLoader(
-    private val fileSystem: FileSystem,
-) {
+class DotEnvLoader {
     /**
-     * 读取并合并环境变量。
+     * 读取环境变量。
      *
      * @param projectDir `.env` 所在目录
-     * @param profile 档位名，null 或空串表示只读 `.env`
-     * @return 合并后的键值，后者覆盖前者
+     * @return 解析出的键值
      */
-    fun load(
-        projectDir: Path,
-        profile: String? = null,
-    ): Map<String, String> {
+    fun load(projectDir: Path): Map<String, String> {
         val vars = LinkedHashMap<String, String>()
-        fileSystem.readText(projectDir.resolve(".env"))?.let { parseInto(it, vars) }
-        if (!profile.isNullOrEmpty()) {
-            fileSystem.readText(projectDir.resolve(".env.$profile"))?.let { parseInto(it, vars) }
-        }
+        FileOps.readText(projectDir.resolve(".env"))?.let { parseInto(it, vars) }
         return vars
     }
 

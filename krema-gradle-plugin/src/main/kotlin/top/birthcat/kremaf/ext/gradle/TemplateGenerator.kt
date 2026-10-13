@@ -2,22 +2,19 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.spi.iml.delegate
+package top.birthcat.kremaf.ext.gradle
 
-import top.birthcat.kremaf.ext.spi.port.FileSystem
 import java.nio.file.Path
 
 /**
  * `init` 的项目骨架落盘。
  *
- * 自研：只复刻目录形状与两份必需文件（`krema.toml` + 主类）。整套模板的落盘方式仍是 map 上的
- * 「Not yet specified」，先把可测的骨架立住。
- *
+ * 自研：只复刻目录形状与两份必需文件（`krema.toml` + 主类）。
  * 命名规则照搬上游：Java 包路径由 identifier 决定，产物名走小写连字符。
+ *
+ * 落出的 `krema.toml` 只写本仓库真读的键 —— 写进去没人读的键比不写更容易误导。
  */
-class TemplateGenerator(
-    private val fileSystem: FileSystem,
-) {
+class TemplateGenerator {
     /**
      * 生成骨架。
      *
@@ -30,9 +27,10 @@ class TemplateGenerator(
         settings: InitSettings,
     ): Path {
         val packagePath = settings.javaPackage.replace('.', '/')
-        fileSystem.writeText(dir.resolve("src-java/$packagePath/Main.java"), mainClass(settings))
-        fileSystem.writeText(dir.resolve("krema.toml"), kremaToml(settings))
-        fileSystem.writeText(dir.resolve(".gitignore"), GITIGNORE)
+        // 主类落在 Gradle 认得的标准主 source set，不造 src-java 这类约定目录。
+        FileOps.writeText(dir.resolve("src/main/java/$packagePath/Main.java"), mainClass(settings))
+        FileOps.writeText(dir.resolve("krema.toml"), kremaToml(settings))
+        FileOps.writeText(dir.resolve(".gitignore"), GITIGNORE)
         return dir
     }
 
@@ -56,21 +54,13 @@ class TemplateGenerator(
         |name = "${settings.appName}"
         |version = "0.1.0"
         |identifier = "${settings.identifier}"
-        |description = "${settings.description}"
-        |
-        |[window]
-        |title = "${settings.windowTitle}"
-        |width = 1024
-        |height = 768
         |
         |[build]
         |frontend_command = "npm run build"
         |frontend_dev_command = "npm run dev"
         |frontend_dev_url = "http://localhost:5173"
         |out_dir = "dist"
-        |java_source_dir = "src-java"
         |main_class = "${settings.javaPackage}.Main"
-        |assets_path = "assets"
         |
         """.trimMargin()
 
@@ -84,15 +74,11 @@ class TemplateGenerator(
  *
  * @property appName 应用名，同时是目录名
  * @property identifier 包标识，Java 包名由它推导
- * @property windowTitle 窗口标题
- * @property description 应用描述
  * @property javaPackage Java 包名
  */
 data class InitSettings(
     val appName: String,
     val identifier: String,
-    val windowTitle: String,
-    val description: String,
     val javaPackage: String,
 ) {
     companion object {
@@ -102,8 +88,6 @@ data class InitSettings(
             return InitSettings(
                 appName = appName,
                 identifier = "com.example.$slug",
-                windowTitle = appName.replaceFirstChar { it.uppercase() },
-                description = "A Krema desktop application",
                 javaPackage = "com.example.$slug",
             )
         }
