@@ -11,10 +11,10 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
-import top.birthcat.kremaf.ext.gradle.KremaProjectTask
+import top.birthcat.kremaf.ext.gradle.tool.Ed25519Signer
 
 /** 用私钥给产物签名。 */
-@DisableCachingByDefault(because = "签名依赖私钥与时间，且输入含密钥本身")
+@DisableCachingByDefault(because = "签名依赖私钥，且输入含密钥本身")
 abstract class KremaSignerSignTask : KremaProjectTask() {
     /** 待签名产物。 */
     @get:InputFile
@@ -32,13 +32,10 @@ abstract class KremaSignerSignTask : KremaProjectTask() {
 
     @TaskAction
     fun sign() {
-        kremaProject()
-        ports()
-            .signer()
-            .sign(
-                artifact = artifact.get().asFile.toPath(),
-                privateKey = privateKey.get().asFile.toPath(),
-                signature = signature.get().asFile.toPath(),
-            )
+        Ed25519Signer().sign(
+            artifact = artifact.get().asFile.toPath(),
+            privateKey = privateKey.get().asFile.toPath(),
+            signature = signature.get().asFile.toPath(),
+        )
     }
 }

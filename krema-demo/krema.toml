@@ -1,0 +1,11 @@
+[package]
+name = "krema-demo"
+version = "0.1.0"
+identifier = "com.example.kremademo"
+
+[build]
+main_class = "com.example.kremademo.Main"
+frontend_dir = "front"
+out_dir = "dist"
+frontend_command = "pnpm run build"
+frontend_install_command = "pnpm install"
