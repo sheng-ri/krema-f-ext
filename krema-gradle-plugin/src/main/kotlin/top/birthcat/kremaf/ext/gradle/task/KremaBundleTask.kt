@@ -17,13 +17,9 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.config.BundleSettings
-import top.birthcat.kremaf.ext.gradle.config.appJarName
 import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
 import top.birthcat.kremaf.ext.gradle.domain.Platform
-import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
-import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
-import java.io.ByteArrayOutputStream
-import java.nio.file.Files
+import top.birthcat.kremaf.ext.gradle.tool.JpackageTool
 import java.nio.file.Path
 import javax.inject.Inject
 
@@ -71,6 +67,7 @@ abstract class KremaBundleTask : KremaProjectTask() {
     abstract val execOperations: ExecOperations
 
     @TaskAction
+    @Throws(GradleException::class)
     fun bundle() {
         val settings = bundleSettings()
         val icon =
@@ -81,70 +78,17 @@ abstract class KremaBundleTask : KremaProjectTask() {
                 linuxIcon = linuxIcon.orNull?.asFile?.toPath(),
                 tomlIcon = settings.icon,
             )
-        runJpackage(appLibDir.get().asFile.toPath(), settings.copy(icon = icon))
+        JpackageTool(execOperations).appImage(
+            binDir = Path.of(jdkBinDir.get()),
+            settings = settings.copy(icon = icon),
+            appLibDir = appLibDir.get().asFile.toPath(),
+            runtimeImageDir = runtimeImageDir.get().asFile.toPath(),
+            dest = outputDir.get().asFile.toPath(),
+        )
     }
 
     private fun targetPlatform(): String {
         // app-image 落盘平台即宿主平台；图标按它选。
         return System.getProperty("os.name")
     }
-
-    private fun runJpackage(
-        libDir: Path,
-        settings: BundleSettings,
-    ) {
-        val platform = Platform.of(System.getProperty("os.name"))
-        val dest = outputDir.get().asFile.toPath()
-        Files.createDirectories(dest)
-        // jpackage 见到已存在的 app-image 目录就报「目录已存在」；该目录是本 task 声明的产物，重建前清空是安全的。
-        //
-        // 先去只读再删：jpackage 生成的启动器带 ReadOnly 属性，而 deleteRecursively 删不掉只读文件 ——
-        // 表现是 app/ 与 runtime/ 都清干净了、只剩启动器，目录因删不空而留着，下一次构建就此卡死在「目录已存在」。
-        val appImage = dest.resolve(platform.appImageDirName(settings.appName)).toFile()
-        appImage.walkTopDown().forEach { it.setWritable(true) }
-        appImage.deleteRecursively()
-
-        val command =
-            mutableListOf(
-                Path.of(jdkBinDir.get()).resolve("jpackage" + executableSuffix()).toString(),
-                "--type",
-                "app-image",
-                "--name",
-                settings.appName,
-                "--input",
-                libDir.toString(),
-                "--main-jar",
-                appJarName(settings),
-                "--main-class",
-                settings.mainClass,
-                "--runtime-image",
-                runtimeImageDir.get().asFile.absolutePath,
-                "--dest",
-                dest.toString(),
-            )
-        // 每个 --java-options 各占一个参数：值里带空格时不会被拆开，jpackage 才认得整条选项。
-        javaOptions(platform).forEach { option -> command += listOf("--java-options", option) }
-        // 图标：解析出来才加，缺失不报错。
-        settings.icon?.let { command += listOf("--icon", it.toString()) }
-
-        val captured = ByteArrayOutputStream()
-        val exit =
-            execOperations
-                .exec { spec ->
-                    spec.commandLine(command)
-                    spec.isIgnoreExitValue = true
-                    spec.standardOutput = captured
-                    spec.errorOutput = captured
-                }.exitValue
-        if (exit != 0) {
-            throw GradleException("jpackage 生成 app-image 失败：\n$captured")
-        }
-    }
-
-    private fun javaOptions(platform: Platform): List<String> =
-        buildList {
-            add("--enable-native-access=ALL-UNNAMED")
-            // macOS 的应用进程必须跑在主线程上，缺这条选项启动器起不来。
-            if (platform == Platform.DARWIN) add("-XstartOnFirstThread")
-        }
 }

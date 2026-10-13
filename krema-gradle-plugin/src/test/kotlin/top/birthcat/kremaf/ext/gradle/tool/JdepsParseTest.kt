@@ -2,11 +2,12 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle.task
+package top.birthcat.kremaf.ext.gradle.tool
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import top.birthcat.kremaf.ext.gradle.tool.jdepsModulesFrom
 
 /** jdeps 输出解析：成功时第一行即模块清单。 */
 class JdepsParseTest {

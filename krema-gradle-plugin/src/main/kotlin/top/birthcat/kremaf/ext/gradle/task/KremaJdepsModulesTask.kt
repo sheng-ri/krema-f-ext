@@ -14,6 +14,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import org.gradle.work.DisableCachingByDefault
+import top.birthcat.kremaf.ext.gradle.tool.JdepsRunner
 import java.nio.file.Path
 import javax.inject.Inject
 
@@ -42,6 +43,7 @@ abstract class KremaJdepsModulesTask : DefaultTask() {
     abstract val execOperations: ExecOperations
 
     @TaskAction
+    @Throws(GradleException::class)
     fun printModules() {
         val out =
             JdepsRunner(execOperations, Path.of(jdkBinDir.get()), multiRelease.get(), classpathFiles)

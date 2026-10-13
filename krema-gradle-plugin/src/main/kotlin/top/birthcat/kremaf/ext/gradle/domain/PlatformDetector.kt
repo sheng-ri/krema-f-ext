@@ -68,7 +68,12 @@ enum class Platform {
         }
     }
 
-    /** 图标文件后缀，按平台推断：`krema.toml` 的 `[bundle].icon` 按此后缀兜底匹配。 */
+    /**
+     * 图标文件后缀，按平台推断：`krema.toml` 的 `[bundle].icon` 按此后缀兜底匹配。
+     *
+     * 平台未知时抛 [IllegalStateException]：未知平台没有可推断的后缀。
+     */
+    @Throws(IllegalStateException::class)
     fun iconSuffix(): String =
         when (this) {
             DARWIN -> "icns"

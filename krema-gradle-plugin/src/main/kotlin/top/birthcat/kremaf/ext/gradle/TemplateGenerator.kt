@@ -17,11 +17,7 @@ import java.nio.file.Path
  */
 class TemplateGenerator {
     /**
-     * 生成骨架。
-     *
-     * @param dir 项目根目录
-     * @param settings 生成参数
-     * @return `dir`
+     * 生成 `init` 骨架：主类 + `krema.toml` + `.gitignore` 落盘到 [dir]，返回 [dir]。
      */
     fun generate(
         dir: Path,
@@ -83,15 +79,14 @@ class TemplateGenerator {
 }
 
 /**
- * `init` 的输入。
- *
- * @property appName 应用名，同时是目录名
- * @property identifier 包标识，Java 包名由它推导
- * @property javaPackage Java 包名
+ * `init` 的输入：应用名、包标识、Java 包名三者互相推导。
  */
 data class InitSettings(
+    /** 应用名，同时是目录名与产物名。 */
     val appName: String,
+    /** 包标识，Java 包名由它推导。 */
     val identifier: String,
+    /** Java 包名，决定主类文件路径。 */
     val javaPackage: String,
 ) {
     companion object {

@@ -69,6 +69,7 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
     abstract val execOperations: ExecOperations
 
     @TaskAction
+    @Throws(GradleException::class)
     fun build() {
         // 前端目录不存在时报指名道姓的错：命令一旦执行失败只会得到 Gradle 通用信息
         // （Windows 上是「Cannot run program "cmd"」），指不到 frontend_dir 这个配置项。
@@ -84,6 +85,7 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
 
     private fun install(command: String) = run(command, "前端依赖安装")
 
+    @Throws(GradleException::class)
     private fun run(
         command: String,
         label: String,

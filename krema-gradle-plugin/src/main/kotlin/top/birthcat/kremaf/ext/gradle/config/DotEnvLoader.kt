@@ -15,10 +15,7 @@ import java.nio.file.Path
  */
 class DotEnvLoader {
     /**
-     * 读取环境变量。
-     *
-     * @param projectDir `.env` 所在目录
-     * @return 解析出的键值
+     * 解析 [projectDir] 下的 `.env` 为键值对；文件缺失或不可读时返回空表。
      */
     fun load(projectDir: Path): Map<String, String> {
         val vars = LinkedHashMap<String, String>()

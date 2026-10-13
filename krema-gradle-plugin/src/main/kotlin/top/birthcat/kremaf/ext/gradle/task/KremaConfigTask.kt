@@ -15,6 +15,7 @@ import top.birthcat.kremaf.ext.gradle.config.BundleSettings
 import top.birthcat.kremaf.ext.gradle.config.KremaConfig
 import top.birthcat.kremaf.ext.gradle.config.KremaConfigLoader
 import top.birthcat.kremaf.ext.gradle.config.KremaExtension
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -72,17 +73,14 @@ abstract class KremaConfigTask : DefaultTask() {
     @get:Input
     abstract val configFilePresent: Property<Boolean>
 
-    /** `krema.toml` 的解析结果。默认路径缺失即无值、不报错；显式指定却缺失才硬失败指到路径。 */
+    /**
+     * `krema.toml` 的解析结果。默认路径缺失即无值、不报错；显式指定却缺失才硬失败指到路径。
+     *
+     * 显式指定却缺失时抛 [IllegalStateException]，报错指到 `kremaInit` 让用户补文件。
+     */
+    @Throws(IllegalStateException::class)
     protected fun config(): KremaConfig {
-        val toml = Path.of(configFilePath.get())
-        val loaded =
-            if (configFilePresent.get()) {
-                KremaConfigLoader().loadOrDefault(toml)
-            } else if (configFileSetExplicitly.get()) {
-                error("krema.configFile 指向的 krema.toml 不存在：$toml")
-            } else {
-                KremaConfig()
-            }
+        val loaded = loadKremaConfig(configFilePath.get(), configFilePresent.get(), configFileSetExplicitly.get())
         val explicitMain = mainClass.orNull
         return loaded.copy(build = loaded.build.copy(mainClass = explicitMain ?: loaded.build.mainClass))
     }
@@ -111,13 +109,7 @@ internal fun KremaConfigTask.configureProject(ext: KremaExtension) {
     )
     configFileSetExplicitly.convention(ext.configFile.isPresent)
     configFilePresent.convention(
-        project.provider {
-            java.nio.file.Files
-                .exists(
-                    java.nio.file.Path
-                        .of(configFilePath.get()),
-                )
-        },
+        project.provider { Path.of(configFilePath.get()).let(Files::exists) },
     )
     mainClass.convention(ext.mainClass)
 }
@@ -128,6 +120,26 @@ data class KremaApplicationClasspath(
     val resourcesDir: java.io.File?,
     val runtimeClasspath: org.gradle.api.artifacts.Configuration,
 )
+
+/**
+ * 按「文件存在性 + 是否显式指定」读取 `krema.toml`：显式指定却缺失硬失败指到路径，默认路径缺失即无值。
+ *
+ * `krema { }` 块的覆盖值不在这里合并——那是各 task 自己的事。抛 [IllegalStateException] 指到 `kremaInit`。
+ */
+internal fun loadKremaConfig(
+    configFilePath: String,
+    configFilePresent: Boolean,
+    configFileSetExplicitly: Boolean,
+): KremaConfig {
+    val toml = Path.of(configFilePath)
+    return if (configFilePresent) {
+        KremaConfigLoader().loadOrDefault(toml)
+    } else if (configFileSetExplicitly) {
+        error("krema.configFile 指向的 krema.toml 不存在：$toml")
+    } else {
+        KremaConfig()
+    }
+}
 
 /**
  * 应用进程运行所需的 classpath 来源。

@@ -21,8 +21,8 @@ import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
 import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
-import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
 import top.birthcat.kremaf.ext.gradle.tool.AppImageTool
+import top.birthcat.kremaf.ext.gradle.tool.JpackageTool
 import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.nio.file.Path
@@ -37,7 +37,7 @@ import javax.inject.Inject
  */
 @CacheableTask
 abstract class KremaPlatformTask : KremaProjectTask() {
-    /** 本格式。 */
+    /** 本 task 要出的平台包格式，取自 `krema.bundling` 对应平台的格式集合。 */
     @get:Input
     abstract val format: Property<BundleFormat>
 
@@ -72,6 +72,7 @@ abstract class KremaPlatformTask : KremaProjectTask() {
     abstract val execOperations: ExecOperations
 
     @TaskAction
+    @Throws(GradleException::class)
     fun buildPlatform() {
         val format = format.get()
         val settings = bundleSettings()
@@ -119,6 +120,7 @@ abstract class KremaPlatformTask : KremaProjectTask() {
     }
 
     /** jpackage 安装器：复用 app-image，不再重打。 */
+    @Throws(GradleException::class)
     private fun jpackageInstaller(
         format: BundleFormat,
         settings: BundleSettings,
@@ -131,24 +133,18 @@ abstract class KremaPlatformTask : KremaProjectTask() {
                 linuxIcon = linuxIcon.orNull?.asFile?.toPath(),
                 tomlIcon = settings.icon,
             )
-        val command =
-            mutableListOf(
-                Path.of(jdkBinDir.get()).resolve("jpackage" + executableSuffix()).toString(),
-                "--type",
-                format.jpackageType
-                    ?: throw GradleException("格式 $format 没有 jpackage type，不该走到安装器分支"),
-                "--name",
-                settings.appName,
-                "--dest",
-                outputDir.get().asFile.absolutePath,
-                "--app-image",
-                appImageDir.get().asFile.absolutePath,
-            )
-        icon?.let { command += listOf("--icon", it.toString()) }
-        runCommand(command, "jpackage 生成 ${format.id} 失败")
+        JpackageTool(execOperations).installer(
+            binDir = Path.of(jdkBinDir.get()),
+            format = format,
+            settings = settings,
+            appImageDir = appImageDir.get().asFile.toPath(),
+            dest = outputDir.get().asFile.toPath(),
+            icon = icon,
+        )
     }
 
     /** AppImage：把 app-image 目录交给 `appimagetool` 封装。 */
+    @Throws(GradleException::class)
     private fun appImageTool(settings: BundleSettings) {
         val rawTool =
             AppImageTool.findInPath()
@@ -241,6 +237,7 @@ abstract class KremaPlatformTask : KremaProjectTask() {
      * 因此无 FUSE 也能跑，抽出的是普通 ELF 二进制，用它打包不再依赖 FUSE。已经是真二进制（PATH 里装的那种）
      * 不认 `--appimage-extract`，抽出失败就回退到原工具。
      */
+    @Throws(GradleException::class)
     private fun resolveAppImageTool(rawTool: Path): Path {
         val extractDir =
             outputDir
@@ -268,6 +265,7 @@ abstract class KremaPlatformTask : KremaProjectTask() {
         return inner
     }
 
+    @Throws(GradleException::class)
     private fun runCommand(
         command: List<String>,
         failure: String,

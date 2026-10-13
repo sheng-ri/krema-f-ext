@@ -153,11 +153,6 @@ abstract class KremaBundlingExtension {
 /**
  * 按宿主平台从三张属性里选要出的格式。纯函数便于单测：把「跨平台写的格式列表只留宿主子集」这一层
  * 与 Gradle 的 `SetProperty` 解耦。
- *
- * @param platform 宿主平台
- * @param macos macOS 属性里的格式
- * @param windows Windows 属性里的格式
- * @param linux Linux 属性里的格式
  */
 fun selectHostFormats(
     platform: Platform,

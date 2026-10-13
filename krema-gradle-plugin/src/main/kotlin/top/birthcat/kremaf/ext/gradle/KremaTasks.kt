@@ -350,6 +350,7 @@ private fun Project.toolchainLanguageVersion(): Provider<JavaLanguageVersion> =
  * 自动跟着 toolchain 走 —— 默认值与「跟着编译走」这两条都成立，而直接读 toolchain 只满足后者，
  * 会在没配 toolchain 的工程里拿不到值，把一条本该有默认值的输入变成硬前置。
  */
+@Throws(GradleException::class)
 private fun Project.targetBytecodeVersion(): Provider<String> =
     providers.provider {
         val target = extensions.getByType(JavaPluginExtension::class.java).targetCompatibility

@@ -16,8 +16,8 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
-import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
-import java.io.ByteArrayOutputStream
+import top.birthcat.kremaf.ext.gradle.tool.JdepsRunner
+import top.birthcat.kremaf.ext.gradle.tool.JlinkTool
 import java.nio.file.Path
 import javax.inject.Inject
 
@@ -70,16 +70,18 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
     abstract val execOperations: ExecOperations
 
     @TaskAction
+    @Throws(GradleException::class)
     fun createRuntimeImage() {
         val binDir = Path.of(jdkBinDir.get())
         val explicit = modules.get()
         // 排序后交给 jlink：SetProperty 的指纹对迭代顺序敏感，用户从 Map 派生集合时顺序可能变，
         // 不排序会让同一份清单偶发地重跑 jlink。
         val moduleList = if (explicit.isEmpty()) jdepsModules(binDir) else explicit.sorted().joinToString(",")
-        jlink(binDir, moduleList)
+        JlinkTool(execOperations).trim(binDir, moduleList, runtimeImageDir.get().asFile.toPath())
     }
 
     /** 取应用 classpath 依赖到的 JDK 模块，逗号分隔，形如 `java.base,java.desktop`。 */
+    @Throws(GradleException::class)
     private fun jdepsModules(binDir: Path): String {
         val out = jdepsRunner().run(verbose = false)
         val modules = out.firstLine()
@@ -96,31 +98,4 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
             multiRelease = multiRelease.get(),
             classpathFiles = classpathFiles,
         )
-
-    private fun jlink(
-        binDir: Path,
-        modules: String,
-    ) {
-        val target = runtimeImageDir.get().asFile
-        // Gradle 在 action 前就把 @OutputDirectory 建出来，而 jlink 见到已存在的目录就报「目录已存在」。
-        // 该目录是本 task 声明的产物，重建前清空是安全的。
-        target.deleteRecursively()
-        val captured = ByteArrayOutputStream()
-        val exit =
-            execOperations
-                .exec { spec ->
-                    spec.commandLine(tool(binDir, "jlink"), "--add-modules", modules, "--output", target.absolutePath)
-                    spec.isIgnoreExitValue = true
-                    spec.standardOutput = captured
-                    spec.errorOutput = captured
-                }.exitValue
-        if (exit != 0) {
-            throw GradleException("裁剪运行时镜像失败（模块：$modules）：\n$captured")
-        }
-    }
-
-    private fun tool(
-        binDir: Path,
-        name: String,
-    ): String = binDir.resolve(name + executableSuffix()).toString()
 }

@@ -14,6 +14,7 @@ npx --yes skills add "https://cnb.cool/BirthCat/mirror/mattpocock-skills.git" \
   -s code-review \
   -s domain-modeling \
   -s grill-me \
+  -s improve-codebase-architecture \
   -s grill-with-docs \
   -s grilling \
   -s handoff \
@@ -44,3 +45,29 @@ npx --yes skills add "https://cnb.cool/c.d/caveman.git" \
   -s caveman \
   -g \
   -y
+
+npx --yes skills add https://github.com/Kotlin/kotlinx-rpc \
+  -s gradle_expert \
+  -a codebuddy \
+  -g \
+  -y
+
+
+curl -Ls https://sh.jbang.dev | bash -s - app setup
+  
+cat > ~/.config/mcp/config.json <<'EOF'
+{
+  "mcpServers": {
+    "gradle": {
+      "command": "/root/.jbang/bin/jbang",
+      "args": [
+        "run",
+        "--fresh",
+        "--repos",
+        "tencent=https://mirrors.cloud.tencent.com/nexus/repository/maven-public/",
+        "dev.rnett.gradle-mcp:gradle-mcp:0.0.16"
+      ]
+    }
+  }
+}
+EOF

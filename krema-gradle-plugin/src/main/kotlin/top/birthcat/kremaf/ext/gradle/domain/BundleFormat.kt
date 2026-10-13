@@ -14,15 +14,17 @@ package top.birthcat.kremaf.ext.gradle.domain
  * appimagetool，是格式自身的属性，不该写成「如果是 macOS 就……」的分支 —— 否则 macOS / Windows
  * 那半边永远没人跑到，腐化了也不知道。
  *
- * @param id 进产物路径的稳定标识，改名会挪动产物路径，故与 [name] 解耦。
- * @param platform 所属平台族，只用于兜底筛选与图标后缀推断。
- * @param jpackageType jpackage 的 `--type` 值；[Producer.APP_IMAGE_TOOL] 没有对应 type。
- * @param producer 这个格式的产物怎么造出来。
+ * 构造参数：[id] 进产物路径的稳定标识（与枚举名解耦，改名会挪路径）；[platform] 只用于兜底筛选与图标后缀推断；
+ * [jpackageType] 是 jpackage 的 `--type` 值（[Producer.APP_IMAGE_TOOL] 为 null）；[producer] 决定产物怎么造出来。
  */
 enum class BundleFormat(
+    /** 进产物路径的稳定标识，与枚举名解耦，改名会挪动产物路径。 */
     val id: String,
+    /** 所属平台族，只用于兜底筛选与图标后缀推断。 */
     val platform: Platform,
+    /** jpackage 的 `--type` 值；[Producer.APP_IMAGE_TOOL] 为 null。 */
     val jpackageType: String?,
+    /** 格式产物的制造方式。 */
     val producer: Producer,
 ) {
     APP("app", Platform.DARWIN, "app-image", Producer.APP_IMAGE),
@@ -35,7 +37,7 @@ enum class BundleFormat(
     RPM("rpm", Platform.LINUX, "rpm", Producer.JPACKAGE_INSTALLER),
     ;
 
-    /** 格式产物的制造方式。 */
+    /** 产物怎么造出来：复用已有 app-image 的三种不同方式，与平台解耦。 */
     enum class Producer {
         /** app-image 目录本身就是产物（macOS `.app` 即应用身份）。 */
         APP_IMAGE,

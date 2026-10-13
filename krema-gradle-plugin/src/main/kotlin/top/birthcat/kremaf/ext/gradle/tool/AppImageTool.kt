@@ -26,8 +26,6 @@ object AppImageTool {
      * 在给定目录列表里找 `appimagetool`。
      *
      * 抽成纯函数（不读环境变量）便于单测：调用方把 `PATH` 拆好传进来即可。
-     *
-     * @return 第一个存在的可执行文件路径，都没有返回 null
      */
     fun findInPaths(paths: List<Path>): Path? {
         val name = executableName()
@@ -44,9 +42,9 @@ object AppImageTool {
 
     /**
      * 下载 `appimagetool` 到 [destDir]，返回落下的可执行文件。
-     *
-     * @throws IllegalStateException 下载失败，报错里带「手动装」与「关开关」两条出路
+     * 失败抛 IllegalStateException，报错给出「手动装 / 关开关」两条出路。
      */
+    @Throws(IllegalStateException::class)
     fun download(destDir: Path): Path {
         val url = DOWNLOAD_URL
         val target = destDir.resolve(executableName())

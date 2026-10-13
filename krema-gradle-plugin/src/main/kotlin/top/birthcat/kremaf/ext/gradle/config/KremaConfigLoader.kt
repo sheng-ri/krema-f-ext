@@ -16,10 +16,7 @@ import java.nio.file.Path
  */
 class KremaConfigLoader {
     /**
-     * 读配置文件，解析失败时退回默认值。
-     *
-     * @param path `krema.toml` 路径
-     * @return 解析结果
+     * 读 `krema.toml`，解析失败时退回默认值；文件缺失或解析异常都返回默认 [KremaConfig]。
      */
     fun loadOrDefault(path: Path): KremaConfig {
         if (!Files.isRegularFile(path)) return KremaConfig()

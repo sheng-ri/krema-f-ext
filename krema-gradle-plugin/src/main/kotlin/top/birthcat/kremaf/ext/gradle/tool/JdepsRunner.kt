@@ -2,7 +2,7 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle.task
+package top.birthcat.kremaf.ext.gradle.tool
 
 import org.gradle.api.file.FileCollection
 import org.gradle.process.ExecOperations

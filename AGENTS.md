@@ -1,27 +1,24 @@
 # AGENTS.md
 
-## 文档
+## 文档规范
 
 - `AGENTS.md` 只写约束。写「必须 / 禁止 / 优先」。
 - `README.md` 只写用法与介绍。写「这是什么、怎么跑」。
 - 所有约束都缩略为一个列表项，放在章节下。
 
-## 代码规范
+## 注释规范
 
-- 注释只写在 public API 上：对外库暴露的 API、模块之间的交互 API。内部实现省略注释。
+- 用户是在构建脚本里直接命名、配置或调用的类型，方法，属性视为公开api。
 - 不用注释复述代码。注释解释「为什么」，不解释「是什么」。
-- 代码合并/提交到远程时执行 `./gradlew spotlessCheck` 必须干净。
+- 针对公开api，使用kotlin doc契约描述，注释不应复述读者一眼就能从代码看出的信息；它应补充代码无法表达的信息，包括意和必要的背景。但是不使用块标签。应对每个属性进行注释。
+- 针对内部api，应该尽量精简，以一行kotlin doc为主。
+- 错误抛出总是标注`@Throws(ExactException.class)`
+
+## 代码规范
+。
+- 代码合并/提交到远程时执行 `./gradlew spotlessCheck` 必须干净。而平时修改不应该频繁执行这个行为。
 - 测试方法名必须 ≤30 字符；每个 `@Test` 方法必须加 `@DisplayName` 标注中文名。
-
-## 外部 skill
-
-- 涉及 Gradle API（`org.gradle.api` / `org.gradle.api.tasks` / `org.gradle.kotlin.dsl`）的改动，动手前必须先装对应版本的 skill。
-
-```bash
-npx skills add "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-api-9.8.0/-/@birthcat-dev/gradle-plugin-api-9.8.0-9.8.0.tgz" -g -a codebuddy -y
-npx skills add "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-plugin-tasks-9.8.0/-/@birthcat-dev/gradle-plugin-tasks-9.8.0-9.8.0.tgz" -g -a codebuddy -y
-npx skills add "https://npm.cnb.cool/BirthCat-Dev/skills/-/packages/@birthcat-dev/gradle-kts-9.8.0/-/@birthcat-dev/gradle-kts-9.8.0-9.8.0.tgz" -g -a codebuddy -y
-```
+- 使用链式调用风格。
 
 ## 提交规范
 
