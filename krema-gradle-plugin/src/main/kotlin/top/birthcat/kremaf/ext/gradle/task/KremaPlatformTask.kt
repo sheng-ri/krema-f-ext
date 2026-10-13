@@ -12,6 +12,8 @@ import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.config.BundleSettings
@@ -39,8 +41,13 @@ abstract class KremaPlatformTask : KremaProjectTask() {
     @get:Input
     abstract val format: Property<BundleFormat>
 
-    /** `kremaBundle` 产出的 app-image 目录，作为本格式产物的输入。 */
+    /**
+     * `kremaBundle` 产出的 app-image 目录，作为本格式产物的输入。
+     *
+     * 按内容而非路径判变更：app-image 由 `kremaBundle` 的 `outputDir` 定位，目录挪位不代表产物变了。
+     */
     @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val appImageDir: DirectoryProperty
 
     /** jpackage 所在的可执行文件目录，取自 JDK toolchain 而非 PATH。 */
