@@ -100,6 +100,7 @@ internal fun Project.registerKremaTasks() {
         task.configureProject(ext)
         task.runtimeImageDir.convention(task.outputDir.dir("runtime"))
         task.jdkBinDir.set(jdkBinDir())
+        task.hostPlatform.set(PlatformDetector.detect())
         task.multiRelease.set(targetBytecodeVersion())
         task.classpathFiles.from(classpath.classesDirs)
         task.classpathFiles.from(classpath.runtimeClasspath)
@@ -149,6 +150,7 @@ internal fun Project.registerKremaTasks() {
                 .flatMap { it.runtimeImageDir },
         )
         task.jdkBinDir.set(jdkBinDir())
+        task.hostPlatform.set(PlatformDetector.detect())
         task.macIcon.set(ext.bundling.macIcon)
         task.winIcon.set(ext.bundling.winIcon)
         task.linuxIcon.set(ext.bundling.linuxIcon)
@@ -190,6 +192,7 @@ internal fun Project.registerKremaTasks() {
                             .map { it.dir(appImageDirName) },
                     )
                     task.jdkBinDir.set(jdkBinDir())
+                    task.hostPlatform.set(PlatformDetector.detect())
                     task.appImageToolAutoDownload.convention(ext.bundling.appImageToolAutoDownload.orElse(true))
                     task.macIcon.set(ext.bundling.macIcon)
                     task.winIcon.set(ext.bundling.winIcon)
@@ -308,15 +311,6 @@ private fun KremaDevRunTask.configureProjectDevRun(ext: KremaExtension) {
         ext.configFile.orElse(project.layout.projectDirectory.file("krema.toml")).map { it.asFile.absolutePath },
     )
     configFileSetExplicitly.convention(ext.configFile.isPresent)
-    configFilePresent.convention(
-        project.provider {
-            java.nio.file.Files
-                .exists(
-                    java.nio.file.Path
-                        .of(configFilePath.get()),
-                )
-        },
-    )
     mainClassOverride.convention(ext.mainClass)
     devUrlOverride.convention(ext.devUrl)
 }

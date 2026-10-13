@@ -37,29 +37,39 @@ const val BUNDLE_DIR_NAME: String = "bundle"
  */
 fun platformOutputDirName(formatId: String): String = "platform/$formatId"
 
-/** 解析 jpackage `--icon` 路径：扩展图标优先，退到 [BundleSettings.icon]；都没配或不存在则返回 null 且不传 `--icon`（图标缺失不该阻断打包）。 */
+/**
+ * 四个图标来源：按平台扩展图标优先，[toml] 兜底。四个恒定同行，打包时整组传入，不再散成五个参数。
+ *
+ * 全部可空、默认 null：没配的维度就是「无」，缺了不该阻断打包。
+ */
+data class BundleIcons(
+    val mac: Path? = null,
+    val windows: Path? = null,
+    val linux: Path? = null,
+    val toml: Path? = null,
+)
+
+/** 解析 jpackage `--icon` 路径：扩展图标优先，退到 [BundleIcons.toml]；都没配或不存在则返回 null 且不传 `--icon`（图标缺失不该阻断打包）。 */
 fun resolveBundleIcon(
     platform: Platform,
-    macIcon: Path?,
-    windowsIcon: Path?,
-    linuxIcon: Path?,
-    tomlIcon: Path?,
+    icons: BundleIcons,
 ): Path? {
     val extIcon =
         when (platform) {
-            Platform.DARWIN -> macIcon
-            Platform.WINDOWS -> windowsIcon
-            Platform.LINUX -> linuxIcon
+            Platform.DARWIN -> icons.mac
+            Platform.WINDOWS -> icons.windows
+            Platform.LINUX -> icons.linux
             Platform.UNKNOWN -> return null
         }
     // 配了但文件不存在也跳过而非报错：图标缺失不该阻断整条打包。
     if (extIcon != null && extIcon.toFile().exists()) return extIcon
     // 兜底：[bundle].icon 按宿主平台后缀匹配；后缀对不上说明它是为别的平台准备的，跳过。
-    if (tomlIcon != null &&
-        tomlIcon.toFile().exists() &&
-        tomlIcon.fileName.toString().endsWith(".${platform.iconSuffix()}", ignoreCase = true)
+    val toml = icons.toml
+    if (toml != null &&
+        toml.toFile().exists() &&
+        toml.fileName.toString().endsWith(".${platform.iconSuffix()}", ignoreCase = true)
     ) {
-        return tomlIcon
+        return toml
     }
     return null
 }

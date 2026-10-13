@@ -10,7 +10,9 @@ import top.birthcat.kremaf.ext.gradle.config.BundleSettings
 import top.birthcat.kremaf.ext.gradle.config.appJarName
 import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
 import top.birthcat.kremaf.ext.gradle.domain.Platform
+import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
 import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
+import java.nio.file.Files
 import java.nio.file.Path
 
 /**
@@ -18,6 +20,7 @@ import java.nio.file.Path
  *
  * 两条路径都是「拼命令 + 执行 + 捕获 + 非零退出即失败」同形流程，差异只在参数，故放一起。
  * 工具取自 JDK toolchain 的 bin 目录而非 PATH：用户用别的 JDK 构建时 PATH 上的 jpackage 可能不存在。
+ * [appImage] 的宿主平台由调用方传入：平台包 task 与 bundle task 本就对宿主平台做不同处理，这里不该自作主张再解析一次。
  */
 class JpackageTool(
     private val execOperations: ExecOperations,
@@ -26,12 +29,23 @@ class JpackageTool(
     @Throws(GradleException::class)
     fun appImage(
         binDir: Path,
+        platform: Platform,
         settings: BundleSettings,
         appLibDir: Path,
         runtimeImageDir: Path,
         dest: Path,
     ) {
-        val platform = Platform.of(System.getProperty("os.name"))
+        // jpackage 见到已存在的 app-image 目录就报「目录已存在」；该目录是本 task 声明的产物，重建前清空安全。
+        // 先去只读再删：jpackage 生成的启动器带 ReadOnly 属性，而 deleteRecursively 删不掉只读文件 ——
+        // 表现是 app/ 与 runtime/ 都清干净了、只剩启动器，目录因删不空而留着，下一次构建就此卡死在「目录已存在」。
+        Files.createDirectories(dest)
+        dest
+            .resolve(platform.appImageDirName(settings.appName))
+            .toFile()
+            .let { appImage ->
+                appImage.walkTopDown().forEach { it.setWritable(true) }
+                appImage.deleteRecursively()
+            }
         val command =
             buildList {
                 add(jpackage(binDir))
@@ -106,15 +120,7 @@ class JpackageTool(
         command: List<String>,
         failure: String,
     ) {
-        val captured = java.io.ByteArrayOutputStream()
-        val exit =
-            execOperations
-                .exec { spec ->
-                    spec.commandLine(command)
-                    spec.isIgnoreExitValue = true
-                    spec.standardOutput = captured
-                    spec.errorOutput = captured
-                }.exitValue
-        if (exit != 0) throw GradleException("$failure：\n$captured")
+        val result = execOperations.capture(command)
+        if (result.exitValue != 0) throw GradleException("$failure：\n${result.output}")
     }
 }

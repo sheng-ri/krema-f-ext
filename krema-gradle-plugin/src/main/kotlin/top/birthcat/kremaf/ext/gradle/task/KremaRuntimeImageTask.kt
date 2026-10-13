@@ -16,6 +16,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
+import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.tool.JdepsRunner
 import top.birthcat.kremaf.ext.gradle.tool.JlinkTool
 import java.nio.file.Path
@@ -53,9 +54,13 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
     @get:OutputDirectory
     abstract val runtimeImageDir: DirectoryProperty
 
-    /** jdeps 与 jlink 所在的可执行文件目录，取自 JDK toolchain。 */
-    @get:Internal
+    /** jdeps 与 jlink 所在的可执行文件目录，取自 JDK toolchain。进缓存键：换 JDK 即视为新镜像。 */
+    @get:Input
     abstract val jdkBinDir: Property<String>
+
+    /** 宿主平台：镜像按平台产，跨平台复用无意义，故作为缓存键的一部分。 */
+    @get:Input
+    abstract val hostPlatform: Property<Platform>
 
     /**
      * jdeps 的 `--multi-release` 版本，取编译产物的目标字节码主版本号。
@@ -77,7 +82,7 @@ abstract class KremaRuntimeImageTask : KremaProjectTask() {
         // 排序后交给 jlink：SetProperty 的指纹对迭代顺序敏感，用户从 Map 派生集合时顺序可能变，
         // 不排序会让同一份清单偶发地重跑 jlink。
         val moduleList = if (explicit.isEmpty()) jdepsModules(binDir) else explicit.sorted().joinToString(",")
-        JlinkTool(execOperations).trim(binDir, moduleList, runtimeImageDir.get().asFile.toPath())
+        JlinkTool(execOperations).carve(binDir, moduleList, runtimeImageDir.get().asFile.toPath())
     }
 
     /** 取应用 classpath 依赖到的 JDK 模块，逗号分隔，形如 `java.base,java.desktop`。 */

@@ -11,11 +11,13 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
-import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
+import top.birthcat.kremaf.ext.gradle.config.BundleIcons
 import top.birthcat.kremaf.ext.gradle.config.BundleSettings
 import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
 import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
@@ -23,7 +25,7 @@ import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
 import top.birthcat.kremaf.ext.gradle.tool.AppImageTool
 import top.birthcat.kremaf.ext.gradle.tool.JpackageTool
-import java.io.ByteArrayOutputStream
+import top.birthcat.kremaf.ext.gradle.tool.capture
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.inject.Inject
@@ -34,6 +36,9 @@ import javax.inject.Inject
  * 复用 `kremaBundle` 已经打好的 app-image，按 [BundleFormat.producer] 选工具造出本格式的可安装件，
  * 落进 `build/krema/platform/<format id>`：jpackage 安装器走 `--app-image` 复用，AppImage 走外部
  * `appimagetool`。不再从 `--input lib` 把 jpackage 重跑一遍。
+ *
+ * 可缓存：同一台机器、同一个 JDK、同一个宿主平台下产物不变就直接复用缓存，不必重打。
+ * JDK 路径进缓存键，换 JDK 即视为新产物；宿主平台也单独作为输入，避免把 Linux 的 deb 当 macOS 的 dmg 用。
  */
 @CacheableTask
 abstract class KremaPlatformTask : KremaProjectTask() {
@@ -50,22 +55,36 @@ abstract class KremaPlatformTask : KremaProjectTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val appImageDir: DirectoryProperty
 
-    /** jpackage 所在的可执行文件目录，取自 JDK toolchain 而非 PATH。 */
-    @get:Internal
+    /** jpackage 所在的可执行文件目录，取自 JDK toolchain 而非 PATH。进缓存键：换 JDK 即视为新产物。 */
+    @get:Input
     abstract val jdkBinDir: Property<String>
+
+    /** 宿主平台：跨平台复用无意义，故作为缓存键的一部分。 */
+    @get:Input
+    abstract val hostPlatform: Property<Platform>
 
     /** AppImage 缺工具时是否自动下载。仅 [BundleFormat.Producer.APP_IMAGE_TOOL] 用到。 */
     @get:Input
     abstract val appImageToolAutoDownload: Property<Boolean>
 
-    /** 三个按平台的图标，优先级高于 `[bundle].icon`。文件不存在即跳过。 */
-    @get:Internal
+    /**
+     * 三个按平台的图标，优先级高于 `[bundle].icon`。进缓存键：图标内容变了产物就该重打。
+     *
+     * 按内容而非路径判变更，且文件缺失即跳过，与 [resolveBundleIcon] 的语义一致。
+     */
+    @get:InputFile
+    @get:Optional
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val macIcon: RegularFileProperty
 
-    @get:Internal
+    @get:InputFile
+    @get:Optional
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val winIcon: RegularFileProperty
 
-    @get:Internal
+    @get:InputFile
+    @get:Optional
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val linuxIcon: RegularFileProperty
 
     @get:Inject
@@ -90,7 +109,7 @@ abstract class KremaPlatformTask : KremaProjectTask() {
                 .get()
                 .asFile
                 .toPath()
-                .resolve(Platform.of(System.getProperty("os.name")).appImageDirName(settings.appName))
+                .resolve(hostPlatform.get().appImageDirName(settings.appName))
         dest.toFile().deleteRecursively()
         Files.createDirectories(dest.parent)
         // app-image 带只读启动器，复制前先保证源可读写，否则某些平台复制会报权限错。
@@ -127,11 +146,14 @@ abstract class KremaPlatformTask : KremaProjectTask() {
     ) {
         val icon =
             resolveBundleIcon(
-                platform = Platform.of(System.getProperty("os.name")),
-                macIcon = macIcon.orNull?.asFile?.toPath(),
-                windowsIcon = winIcon.orNull?.asFile?.toPath(),
-                linuxIcon = linuxIcon.orNull?.asFile?.toPath(),
-                tomlIcon = settings.icon,
+                platform = hostPlatform.get(),
+                icons =
+                    BundleIcons(
+                        mac = macIcon.orNull?.asFile?.toPath(),
+                        windows = winIcon.orNull?.asFile?.toPath(),
+                        linux = linuxIcon.orNull?.asFile?.toPath(),
+                        toml = settings.icon,
+                    ),
             )
         JpackageTool(execOperations).installer(
             binDir = Path.of(jdkBinDir.get()),
@@ -248,19 +270,15 @@ abstract class KremaPlatformTask : KremaProjectTask() {
         val inner = extractDir.resolve("squashfs-root/usr/bin/appimagetool")
         if (Files.isRegularFile(inner)) return inner
         Files.createDirectories(extractDir)
-        val captured = ByteArrayOutputStream()
-        val exit =
-            execOperations
-                .exec { spec ->
-                    spec.workingDir = extractDir.toFile()
-                    spec.commandLine(rawTool.toAbsolutePath().toString(), "--appimage-extract")
-                    spec.isIgnoreExitValue = true
-                    spec.standardOutput = captured
-                    spec.errorOutput = captured
-                }.exitValue
-        if (exit != 0) return rawTool
+        // --appimage-extract 在工作目录内把 AppImage 解包成普通 ELF 二进制，不挂载、不需 FUSE。
+        val result =
+            execOperations.capture(
+                listOf(rawTool.toAbsolutePath().toString(), "--appimage-extract"),
+                workingDir = extractDir,
+            )
+        if (result.exitValue != 0) return rawTool
         if (!Files.isRegularFile(inner)) {
-            throw GradleException("抽出 appimagetool 失败：\n$captured")
+            throw GradleException("抽出 appimagetool 失败：\n${result.output}")
         }
         return inner
     }
@@ -270,15 +288,7 @@ abstract class KremaPlatformTask : KremaProjectTask() {
         command: List<String>,
         failure: String,
     ) {
-        val captured = ByteArrayOutputStream()
-        val exit =
-            execOperations
-                .exec { spec ->
-                    spec.commandLine(command)
-                    spec.isIgnoreExitValue = true
-                    spec.standardOutput = captured
-                    spec.errorOutput = captured
-                }.exitValue
-        if (exit != 0) throw GradleException("$failure：\n$captured")
+        val result = execOperations.capture(command)
+        if (result.exitValue != 0) throw GradleException("$failure：\n${result.output}")
     }
 }

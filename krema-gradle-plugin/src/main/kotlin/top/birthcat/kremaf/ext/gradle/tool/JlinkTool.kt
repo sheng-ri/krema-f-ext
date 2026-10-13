@@ -19,27 +19,21 @@ class JlinkTool(
      * 目标目录先清空再裁：jlink 见到已存在的目录就报「目录已存在」，而该目录是本 task 声明的产物，重建前清空安全。
      */
     @Throws(GradleException::class)
-    fun trim(
+    fun carve(
         binDir: Path,
         modules: String,
         outputDir: Path,
     ) {
         outputDir.toFile().deleteRecursively()
-        val captured = java.io.ByteArrayOutputStream()
-        val exit =
-            execOperations
-                .exec { spec ->
-                    spec.commandLine(
-                        binDir.resolve("jlink" + executableSuffix()).toString(),
-                        "--add-modules",
-                        modules,
-                        "--output",
-                        outputDir.toAbsolutePath().toString(),
-                    )
-                    spec.isIgnoreExitValue = true
-                    spec.standardOutput = captured
-                    spec.errorOutput = captured
-                }.exitValue
-        if (exit != 0) throw GradleException("裁剪运行时镜像失败（模块：$modules）：\n$captured")
+        val command =
+            listOf(
+                binDir.resolve("jlink" + executableSuffix()).toString(),
+                "--add-modules",
+                modules,
+                "--output",
+                outputDir.toAbsolutePath().toString(),
+            )
+        val result = execOperations.capture(command)
+        if (result.exitValue != 0) throw GradleException("裁剪运行时镜像失败（模块：$modules）：\n${result.output}")
     }
 }

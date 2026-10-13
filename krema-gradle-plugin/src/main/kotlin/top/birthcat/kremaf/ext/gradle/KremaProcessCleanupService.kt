@@ -12,7 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  * 跟踪 run task 拉起的长驻进程，构建结束时（含用户中断）一并回收，避免留下孤儿进程。
  *
  * `BuildService` 在构建收尾时关闭，Ctrl-C 取消也会触发，故把进程登记在这里、在 [close] 里杀掉整棵进程树。
- * 但 TestKit 下 daemon 取消不一定走到 [close]，所以 run task 在被中断时也会直接调用 [killAll] 兜底。
+ * 但构建被中断时 daemon 取消不一定走到 [close]，所以 run task 在被中断时也会直接调用 [killAll] 兜底。
  */
 abstract class KremaProcessCleanupService :
     BuildService<BuildServiceParameters.None>,

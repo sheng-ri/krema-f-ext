@@ -4,7 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle
 
-/** `krema` 分组下 task 的名字，TestKit 与 README 都从这里取。 */
+/** `krema` 分组下 task 的名字，注册处与 README 都从这里取。 */
 object KremaTaskNames {
     const val GROUP = "krema"
     const val INIT = "kremaInit"

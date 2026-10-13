@@ -15,7 +15,7 @@
 - 错误抛出总是标注`@Throws(ExactException.class)`
 
 ## 代码规范
-。
+
 - 代码合并/提交到远程时执行 `./gradlew spotlessCheck` 必须干净。而平时修改不应该频繁执行这个行为。
 - 测试方法名必须 ≤30 字符；每个 `@Test` 方法必须加 `@DisplayName` 标注中文名。
 - 使用链式调用风格。

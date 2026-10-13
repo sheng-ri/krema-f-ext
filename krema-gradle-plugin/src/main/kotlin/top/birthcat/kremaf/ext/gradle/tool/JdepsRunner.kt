@@ -7,8 +7,6 @@ package top.birthcat.kremaf.ext.gradle.tool
 import org.gradle.api.file.FileCollection
 import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
-import java.io.ByteArrayOutputStream
-import java.nio.charset.Charset
 import java.nio.file.Path
 
 /** 从 jdeps 输出里取第一行非空（成功时即模块清单）。纯函数，便于单测解析。 */
@@ -50,30 +48,21 @@ internal class JdepsRunner(
     fun run(verbose: Boolean): JdepsOutput {
         // jdeps 只认路径形式的输入：传 -cp 再给类名会报「路径不存在」并失败。
         val paths = classpathFiles.files.filter { it.exists() }.map { it.absolutePath }
-        val captured = ByteArrayOutputStream()
-        val exit =
-            execOperations
-                .exec { spec ->
-                    spec.commandLine(
-                        listOf(
-                            binDir.resolve("jdeps" + executableSuffix()).toString(),
-                            // -summary 或 -verbose 与 --print-module-deps 互斥（jdeps 直接报错退出），
-                            // 所以两张检视 task 各走一个开关，而不是同一张 task 上切参数。
-                            if (verbose) "-v" else "--print-module-deps",
-                            // --ignore-missing-deps 抑制不了 -v 下「Module xxx not found」那类退出码，
-                            // 故 verbose 那条路径对非零退出照常出报告。
-                            "--ignore-missing-deps",
-                            // --multi-release 必须给，且必须与 toolchain 版本一致：jackson 这类依赖是
-                            // 多发行版 jar，不给这个选项 jdeps 直接拒读，模块推导就废了。
-                            "--multi-release",
-                            multiRelease,
-                        ) + paths,
-                    )
-                    spec.isIgnoreExitValue = true
-                    spec.standardOutput = captured
-                    spec.errorOutput = captured
-                }.exitValue
-        val bytes = captured.toByteArray()
-        return JdepsOutput(exit, String(bytes, Charset.defaultCharset()), bytes)
+        val command =
+            listOf(
+                binDir.resolve("jdeps" + executableSuffix()).toString(),
+                // -summary 或 -verbose 与 --print-module-deps 互斥（jdeps 直接报错退出），
+                // 所以两张检视 task 各走一个开关，而不是同一张 task 上切参数。
+                if (verbose) "-v" else "--print-module-deps",
+                // --ignore-missing-deps 抑制不了 -v 下「Module xxx not found」那类退出码，
+                // 故 verbose 那条路径对非零退出照常出报告。
+                "--ignore-missing-deps",
+                // --multi-release 必须给，且必须与 toolchain 版本一致：jackson 这类依赖是
+                // 多发行版 jar，不给这个选项 jdeps 直接拒读，模块推导就废了。
+                "--multi-release",
+                multiRelease,
+            ) + paths
+        val result = execOperations.capture(command)
+        return JdepsOutput(result.exitValue, result.output, result.bytes)
     }
 }

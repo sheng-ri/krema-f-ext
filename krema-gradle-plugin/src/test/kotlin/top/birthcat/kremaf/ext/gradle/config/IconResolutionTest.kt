@@ -2,12 +2,13 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle
+package top.birthcat.kremaf.ext.gradle.config
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import top.birthcat.kremaf.ext.gradle.config.BundleIcons
 import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 import java.nio.file.Files
@@ -26,7 +27,7 @@ class IconResolutionTest {
         val mac = file("mac.icns")
         val toml = file("fallback.png")
 
-        val icon = resolveBundleIcon(Platform.DARWIN, mac, null, null, toml)
+        val icon = resolveBundleIcon(Platform.DARWIN, BundleIcons(mac = mac, toml = toml))
 
         assertEquals(mac, icon)
     }
@@ -36,7 +37,7 @@ class IconResolutionTest {
     fun missingExtFallsBackToToml() {
         val toml = file("fallback.icns")
 
-        val icon = resolveBundleIcon(Platform.DARWIN, null, null, null, toml)
+        val icon = resolveBundleIcon(Platform.DARWIN, BundleIcons(toml = toml))
 
         assertEquals(toml, icon)
     }
@@ -46,7 +47,7 @@ class IconResolutionTest {
     fun wrongSuffixSkipped() {
         val toml = file("fallback.png")
 
-        val icon = resolveBundleIcon(Platform.DARWIN, null, null, null, toml)
+        val icon = resolveBundleIcon(Platform.DARWIN, BundleIcons(toml = toml))
 
         assertNull(icon, "macOS 上 .png 兜底应当被跳过")
     }
@@ -54,14 +55,14 @@ class IconResolutionTest {
     @Test
     @DisplayName("三个图标都缺失且无 toml 时不报错返回 null")
     fun noIconReturnsNull() {
-        assertNull(resolveBundleIcon(Platform.LINUX, null, null, null, null))
+        assertNull(resolveBundleIcon(Platform.LINUX, BundleIcons()))
     }
 
     @Test
     @DisplayName("Windows 取 winIcon 并按 ico 后缀兜底")
     fun windowsIcon() {
         val win = file("win.ico")
-        assertEquals(win, resolveBundleIcon(Platform.WINDOWS, null, win, null, null))
-        assertNull(resolveBundleIcon(Platform.WINDOWS, null, null, null, file("x.png")))
+        assertEquals(win, resolveBundleIcon(Platform.WINDOWS, BundleIcons(windows = win)))
+        assertNull(resolveBundleIcon(Platform.WINDOWS, BundleIcons(toml = file("x.png"))))
     }
 }

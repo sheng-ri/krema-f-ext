@@ -66,21 +66,13 @@ abstract class KremaConfigTask : DefaultTask() {
     abstract val configFileSetExplicitly: Property<Boolean>
 
     /**
-     * 解析出来的 `krema.toml` 当前是否存在。
-     *
-     * 路径字符串本身不变，删/建文件不会让 task 重新执行，所以用这个布尔值作为 input 参与 up-to-date。
-     */
-    @get:Input
-    abstract val configFilePresent: Property<Boolean>
-
-    /**
      * `krema.toml` 的解析结果。默认路径缺失即无值、不报错；显式指定却缺失才硬失败指到路径。
      *
      * 显式指定却缺失时抛 [IllegalStateException]，报错指到 `kremaInit` 让用户补文件。
      */
     @Throws(IllegalStateException::class)
     protected fun config(): KremaConfig {
-        val loaded = loadKremaConfig(configFilePath.get(), configFilePresent.get(), configFileSetExplicitly.get())
+        val loaded = loadKremaConfig(configFilePath.get(), configFileSetExplicitly.get())
         val explicitMain = mainClass.orNull
         return loaded.copy(build = loaded.build.copy(mainClass = explicitMain ?: loaded.build.mainClass))
     }
@@ -108,9 +100,6 @@ internal fun KremaConfigTask.configureProject(ext: KremaExtension) {
         ext.configFile.orElse(project.layout.projectDirectory.file("krema.toml")).map { it.asFile.absolutePath },
     )
     configFileSetExplicitly.convention(ext.configFile.isPresent)
-    configFilePresent.convention(
-        project.provider { Path.of(configFilePath.get()).let(Files::exists) },
-    )
     mainClass.convention(ext.mainClass)
 }
 
@@ -124,15 +113,16 @@ data class KremaApplicationClasspath(
 /**
  * 按「文件存在性 + 是否显式指定」读取 `krema.toml`：显式指定却缺失硬失败指到路径，默认路径缺失即无值。
  *
+ * 存在性现算（[Files.exists]），不单独存一份布尔输入，免得两处判定互相打架。
  * `krema { }` 块的覆盖值不在这里合并——那是各 task 自己的事。抛 [IllegalStateException] 指到 `kremaInit`。
  */
+@Throws(IllegalStateException::class)
 internal fun loadKremaConfig(
     configFilePath: String,
-    configFilePresent: Boolean,
     configFileSetExplicitly: Boolean,
 ): KremaConfig {
     val toml = Path.of(configFilePath)
-    return if (configFilePresent) {
+    return if (Files.exists(toml)) {
         KremaConfigLoader().loadOrDefault(toml)
     } else if (configFileSetExplicitly) {
         error("krema.configFile 指向的 krema.toml 不存在：$toml")

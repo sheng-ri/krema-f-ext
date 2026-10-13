@@ -19,6 +19,7 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.domain.commandLineFor
+import top.birthcat.kremaf.ext.gradle.tool.capture
 import javax.inject.Inject
 
 /**
@@ -91,17 +92,9 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
         label: String,
     ) {
         val front = frontendDir.get().asFile
-        val captured = java.io.ByteArrayOutputStream()
-        val result =
-            execOperations.exec { spec ->
-                spec.commandLine(commandLineFor(command))
-                spec.workingDir(front)
-                spec.isIgnoreExitValue = true
-                spec.standardOutput = captured
-                spec.errorOutput = captured
-            }
+        val result = execOperations.capture(commandLineFor(command), workingDir = front.toPath())
         if (result.exitValue != 0) {
-            throw GradleException("$label 失败（命令：$command）：\n$captured")
+            throw GradleException("$label 失败（命令：$command）：\n${result.output}")
         }
     }
 }

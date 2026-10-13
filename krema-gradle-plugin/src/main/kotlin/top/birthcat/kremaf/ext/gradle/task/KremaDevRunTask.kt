@@ -26,9 +26,6 @@ abstract class KremaDevRunTask : org.gradle.api.tasks.JavaExec() {
     abstract val configFilePath: org.gradle.api.provider.Property<String>
 
     @get:Input
-    abstract val configFilePresent: org.gradle.api.provider.Property<Boolean>
-
-    @get:Input
     abstract val configFileSetExplicitly: org.gradle.api.provider.Property<Boolean>
 
     /** 主类，覆盖 `krema.toml` 的 `[build].main_class`。 */
@@ -48,7 +45,7 @@ abstract class KremaDevRunTask : org.gradle.api.tasks.JavaExec() {
 
     /** 解析 krema.toml，缺失但显式指定时抛错指到路径。 */
     @Throws(IllegalStateException::class)
-    private fun kremaConfig(): KremaConfig = loadKremaConfig(configFilePath.get(), configFilePresent.get(), configFileSetExplicitly.get())
+    private fun kremaConfig(): KremaConfig = loadKremaConfig(configFilePath.get(), configFileSetExplicitly.get())
 
     /** 解析主类：`krema { }` 覆盖 `krema.toml` 的 `[build].main_class`，都没有时回落到 `<identifier>.Main`。 */
     @Throws(IllegalStateException::class)

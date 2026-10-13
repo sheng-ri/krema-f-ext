@@ -2,7 +2,7 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle
+package top.birthcat.kremaf.ext.gradle.config
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName

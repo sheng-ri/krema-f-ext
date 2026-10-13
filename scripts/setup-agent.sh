@@ -54,11 +54,13 @@ npx --yes skills add https://github.com/Kotlin/kotlinx-rpc \
 
 
 curl -Ls https://sh.jbang.dev | bash -s - app setup
-  
-cat > ~/.config/mcp/config.json <<'EOF'
+mkdir ~/.config/mcp
+
+cat > ~/.codebuddy/.mcp.json <<'EOF'
 {
   "mcpServers": {
     "gradle": {
+      "type": "stdio",
       "command": "/root/.jbang/bin/jbang",
       "args": [
         "run",
@@ -66,7 +68,7 @@ cat > ~/.config/mcp/config.json <<'EOF'
         "--repos",
         "tencent=https://mirrors.cloud.tencent.com/nexus/repository/maven-public/",
         "dev.rnett.gradle-mcp:gradle-mcp:0.0.16"
-      ]
+      ],
     }
   }
 }
