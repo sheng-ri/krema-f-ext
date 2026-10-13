@@ -8,6 +8,8 @@ import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import top.birthcat.kremaf.ext.gradle.config.ASSETS_DIR
 import top.birthcat.kremaf.ext.gradle.config.BundleSettings
@@ -35,8 +37,14 @@ abstract class KremaBuildTask : KremaProjectTask() {
     @get:Classpath
     abstract val classpathFiles: ConfigurableFileCollection
 
-    /** 前端 dist，打进独立的 assets jar（Krema 从 classpath 的 `assets/` 读）。 */
+    /**
+     * 前端 dist，打进独立的 assets jar（Krema 从 classpath 的 `assets/` 读）。
+     *
+     * 内容是前端工具链的构建产物，路径随前端目录与 `out_dir` 配置漂移，
+     * 故按内容而非路径判变更：缓存 key 只看文件本身，dist 换目录不失效。
+     */
     @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val distFiles: ConfigurableFileCollection
 
     @TaskAction

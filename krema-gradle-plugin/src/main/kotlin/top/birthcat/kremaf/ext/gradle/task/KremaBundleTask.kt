@@ -12,6 +12,8 @@ import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.config.BundleSettings
@@ -33,12 +35,22 @@ import javax.inject.Inject
  */
 @CacheableTask
 abstract class KremaBundleTask : KremaProjectTask() {
-    /** `kremaBuild` 聚好的 `lib/` 目录：app jar + 依赖 jar + assets jar。 */
+    /**
+     * `kremaBuild` 聚好的 `lib/` 目录：app jar + 依赖 jar + assets jar。
+     *
+     * 按内容而非路径判变更：jar 内容才是打包的身份，目录随 `outputDir` 挪位不该让整个 app-image 重打。
+     */
     @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val appLibDir: DirectoryProperty
 
-    /** jlink 裁出的运行时镜像，即 jpackage 的 `--runtime-image`。 */
+    /**
+     * jlink 裁出的运行时镜像，即 jpackage 的 `--runtime-image`。
+     *
+     * 同 [appLibDir]：jlink 的产物路径取决于 `outputDir`，内容才是唯一身份。
+     */
     @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val runtimeImageDir: DirectoryProperty
 
     /** jpackage 所在的可执行文件目录，取自 JDK toolchain 而非 PATH。 */
