@@ -45,7 +45,12 @@ abstract class KremaFrontendBuildTask : KremaProjectTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val frontendInputs: ConfigurableFileCollection
 
-    /** 前端构建产物目录，约定为 `outputDir/dist`（即 `build/krema/dist`）。 */
+    /**
+     * 前端构建产物目录，取 `krema.toml` 的 `out_dir`（默认 `dist/`，相对项目根）。
+     *
+     * 就是前端工具链自己的落点：命令是用户给的，插件无权把它改道到别处，
+     * 因此这里只声明这个目录为输出，不替用户决定它该落在哪。
+     */
     @get:OutputDirectory
     abstract val distDir: DirectoryProperty
 

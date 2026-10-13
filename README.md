@@ -59,7 +59,7 @@ krema {
 |---|---|---|
 | `kremaInit` | init | 生成项目骨架（`krema.toml` + 主类 + `.gitignore`），主类落在 `src/main/java` |
 | `kremaBuild` | build | 让 Gradle 编译主 source set，并跑前端生产构建（`frontend.buildCommand`），把 `dist` 作为可缓存、UP-TO-DATE 的产出收进 `build/krema` |
-| `kremaFrontendBuild` | — | 跑前端生产构建（`frontend.buildCommand`），产物 `build/krema/dist` 声明成可缓存、UP-TO-DATE 的输出；被 `kremaBuild` 依赖，也可单独跑只重做前端 |
+| `kremaFrontendBuild` | — | 跑前端生产构建（`frontend.buildCommand`），产物目录取 `krema.toml` 的 `out_dir`（默认 `dist/`）声明成可缓存、UP-TO-DATE 的输出；被 `kremaBuild` 依赖，也可单独跑只重做前端 |
 | `kremaBundleDev` | bundle | dev 档打包：最小形态（macOS 才给正经 `.app`，其余平台靠 devUrl 拉前端），不打包 `dist`，产物落 `build/krema/dev` |
 | `kremaBundleProd` | bundle | prod 档打包：全平台出完整可分发形态，并把 `dist` 收进去，产物落 `build/krema/prod` |
 | `kremaBundleRunDev` | dev | 起前端 dev server 并跑 dev 档应用，长驻前台，中断时回收进程，不进 CI 门禁 |

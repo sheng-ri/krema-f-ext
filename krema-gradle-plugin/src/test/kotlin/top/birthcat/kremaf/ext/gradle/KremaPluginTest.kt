@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle
 
+import org.gradle.testkit.runner.BuildResult
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
 import org.gradle.tooling.CancellationTokenSource
@@ -17,9 +18,119 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.FileWriter
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.Properties
+import java.util.zip.ZipFile
 
 class KremaPluginTest {
+    private companion object {
+        /** 测试 build script 里注册的那张探针 task，用来把插件解析出的资产路径打印出来。 */
+        const val ASSETS_PATH_PROBE = "showAssetsPath"
+
+        /** 报告宿主平台与筛后平台包的 task 名。 */
+        const val REPORT_TASK = "reportPlatformFormats"
+
+        /** 三平台的格式各写一个，用于验证筛选只留宿主平台的子集。 */
+        const val ALL_FORMATS = "BundleFormat.DMG, BundleFormat.MSI, BundleFormat.APP_IMAGE, BundleFormat.DEB"
+
+        /**
+         * 假前端构建产物：只落一个 index.html，够断言资产路径用。
+         *
+         * 落在项目根的 `dist/`，也就是 vite 等前端工具链默认的落点、插件从 `krema.toml` 的 `out_dir` 读到的那个目录。
+         * 刻意不写成插件当前读的位置：fixture 顺着实现写，插件改错地方时测试照样绿，那个洞就是这么漏过去的。
+         */
+        const val FRONTEND_BUILD_SCRIPT = "mkdir -p dist\necho '<html></html>' > dist/index.html"
+
+        /** `writeToml` 里写的包名，也就是 jpackage `--name` 与 app jar 的名字。 */
+        const val APP_NAME = "consumer-app"
+
+        /** `writeMainJava` 写的主类，须与 toml 的 identifier 同包，否则 app jar 的 Main-Class 对不上。 */
+        const val MAIN_CLASS = "com.example.app.Main"
+
+        /** jpackage app-image 的目录名，macOS 上多一个 `.app` 后缀。 */
+        val APP_IMAGE_DIR_NAME = PlatformDetector.detect().appImageDirName(APP_NAME)
+
+        /** 分发形态 × 构建档位的四张打包 task。 */
+        val BUNDLE_TASKS =
+            listOf(
+                KremaTaskNames.BUNDLE_DIST_DEV,
+                KremaTaskNames.BUNDLE_DIST_PROD,
+                KremaTaskNames.BUNDLE_PLATFORM_DEV,
+                KremaTaskNames.BUNDLE_PLATFORM_PROD,
+            )
+    }
+
+    /** 产物根下的某档 bundle 目录，形如 `build/krema/dist/prod`。 */
+    private fun bundleDir(
+        projectDir: File,
+        vararg path: String,
+    ): Path =
+        projectDir
+            .toPath()
+            .resolve("build/krema")
+            .resolve(path.first())
+            .resolve(path[1])
+
+    private fun appImageDir(
+        projectDir: File,
+        vararg path: String,
+    ): Path = bundleDir(projectDir, *path).resolve(APP_IMAGE_DIR_NAME)
+
+    /** app jar 在 app-image 里的落点，随主 jar 名一起被 jpackage 搬进 `lib/app`。 */
+    private fun appJar(
+        projectDir: File,
+        tier: String,
+    ): Path = appImageDir(projectDir, "dist", tier).resolve("lib/app/$APP_NAME.jar")
+
+    /** 便携包 zip 的路径：`<app>-<version>-<target>.zip`，版本与 target 取自 toml 与宿主平台。 */
+    private fun portableZip(
+        projectDir: File,
+        tier: String,
+    ): Path = bundleDir(projectDir, "dist", tier).resolve("$APP_NAME-0.1.0-${hostTarget()}.zip")
+
+    /** 宿主平台标识，与插件内部拼法同款。 */
+    private fun hostTarget(): String = "${PlatformDetector.detect().name.lowercase()}-${PlatformDetector.getArch()}"
+
+    /**
+     * app-image 里那个原生启动器的路径，也就是 run task 真正起的进程。
+     *
+     * 拿 [PlatformBundler] 算，而不是在测试里重拼一遍平台布局：这份路径是「应用进程长什么样」的唯一真相，
+     * 测试另抄一份的话，插件改错布局测试照样绿。路径取绝对形式，因为 `ProcessBuilder` 起的就是绝对路径。
+     */
+    private fun launcherPath(
+        projectDir: File,
+        tier: String,
+    ): Path =
+        PlatformBundler(hostTarget())
+            .launcherPath(BundleSettings(appName = APP_NAME, outputDir = bundleDir(projectDir, "dist", tier)))
+            .toAbsolutePath()
+
+    private fun exeSuffix(): String = if (PlatformDetector.detect() == Platform.WINDOWS) ".exe" else ""
+
+    private fun jarEntries(jar: Path): List<String> = zipEntries(jar)
+
+    /** 读 jar 的 manifest 主属性，用来核对 `Main-Class` 之类的启动契约。 */
+    private fun jarManifest(jar: Path): Map<String, String> =
+        ZipFile(jar.toFile()).use { zip ->
+            zip
+                .getInputStream(zip.getEntry("META-INF/MANIFEST.MF"))
+                .reader()
+                .readText()
+                .lineSequence()
+                .map { it.substringBefore(':').trim() to it.substringAfter(':', "").trim() }
+                .filter { (key, value) -> key.isNotEmpty() && value.isNotEmpty() }
+                .toMap()
+        }
+
+    private fun zipEntries(archive: Path): List<String> =
+        ZipFile(archive.toFile()).use { zip ->
+            zip
+                .entries()
+                .asSequence()
+                .map { it.name }
+                .toList()
+        }
+
     @Test
     @DisplayName("插件应用后注册 krema 扩展")
     fun pluginRegistersExtension(
@@ -47,8 +158,8 @@ class KremaPluginTest {
     }
 
     @Test
-    @DisplayName("krema 分组声明九张 task")
-    fun declaresNineKremaTasks(
+    @DisplayName("krema 分组列出四张打包 task")
+    fun declaresKremaTasks(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
@@ -62,6 +173,11 @@ class KremaPluginTest {
         KremaTaskNames.ALL.forEach { name ->
             assertTrue(result.output.contains(name), "task $name 未出现在 krema 分组里：\n${result.output}")
         }
+        assertEquals(
+            BUNDLE_TASKS.size,
+            BUNDLE_TASKS.count { result.output.contains(it) },
+            "打包 task 应当正好是形态 × 档位的四张：\n${result.output}",
+        )
     }
 
     @Test
@@ -125,11 +241,7 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        val fakeNpm =
-            fakeNpm(
-                projectDir,
-                "mkdir -p build/krema/dist\nprintf '<html></html>' > build/krema/dist/index.html",
-            )
+        val fakeNpm = fakeNpm(projectDir, FRONTEND_BUILD_SCRIPT)
         // 没有 krema.toml 是这条用例的要点；但 kremaBuild 现在也会跑前端，所以给一份最小前端输入。
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
@@ -144,7 +256,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/krema/dist/index.html")
+                .resolve("dist/index.html")
                 .toFile()
                 .isFile,
             "前端没产出 dist：\n${result.output}",
@@ -157,11 +269,7 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        val fakeNpm =
-            fakeNpm(
-                projectDir,
-                "mkdir -p build/krema/dist\nprintf '<html></html>' > build/krema/dist/index.html",
-            )
+        val fakeNpm = fakeNpm(projectDir, FRONTEND_BUILD_SCRIPT)
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
 
@@ -171,7 +279,7 @@ class KremaPluginTest {
         assertTrue(
             projectDir
                 .toPath()
-                .resolve("build/krema/dist/index.html")
+                .resolve("dist/index.html")
                 .toFile()
                 .isFile,
             "首次运行没产出 dist：\n${first.output}",
@@ -222,8 +330,11 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
+        val fakeNpm = fakeNpm(projectDir, FRONTEND_BUILD_SCRIPT)
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
+        // 打包 task 经 kremaRuntimeImage 连到 jdeps：没有编译产出时 jdeps 先于配置校验失败，
+        // 报错就指不到 krema.toml 了，故给一份最小主类让流水线走到配置读取那一步。
+        writeMainJava(projectDir)
         Files.writeString(
             projectDir.toPath().resolve("build.gradle.kts"),
             """
@@ -235,12 +346,51 @@ class KremaPluginTest {
             """.trimIndent(),
         )
 
-        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_PROD, fakeNpm = fakeNpm, expectFailure = true)
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_DIST_PROD, fakeNpm = fakeNpm, expectFailure = true)
 
         assertTrue(
             result.output.contains("nope.toml"),
             "显式指定的 krema.toml 不存在应当指到那个路径：\n${result.output}",
         )
+    }
+
+    @Test
+    @DisplayName("未配置资产路径时默认 web")
+    fun assetsPathDefaultsToWeb(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        writeToml(projectDir)
+        Files.writeString(projectDir.toPath().resolve("build.gradle"), assetsPathProbeGradle())
+
+        val result = runGradleWithPluginClasspath(projectDir, ASSETS_PATH_PROBE)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":$ASSETS_PATH_PROBE")?.outcome, result.output)
+        assertTrue(result.output.contains("assetsPath=web"), result.output)
+    }
+
+    @Test
+    @DisplayName("toml 里显式配置覆盖默认资产路径")
+    fun assetsPathFromToml(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("krema.toml"),
+            """
+            [package]
+            name = "consumer-app"
+
+            [build]
+            assets_path = "app-ui"
+            """.trimIndent(),
+        )
+        Files.writeString(projectDir.toPath().resolve("build.gradle"), assetsPathProbeGradle())
+
+        val result = runGradleWithPluginClasspath(projectDir, ASSETS_PATH_PROBE)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":$ASSETS_PATH_PROBE")?.outcome, result.output)
+        assertTrue(result.output.contains("assetsPath=app-ui"), result.output)
     }
 
     @Test
@@ -266,89 +416,173 @@ class KremaPluginTest {
         )
     }
 
-    @Test
-    @DisplayName("kremaBundleProd 落到 prod 输出目录")
-    fun bundleProdOutputDir(
-        @TempDir projectDir: File,
-    ) {
+    /**
+     * 摆一份能跑打包 task 的项目：toml + 主类 + 前端输入，返回假 npm 供 [runGradleWithFakeNpm] 用。
+     *
+     * 四张打包 task 都经 `kremaBuild` 连到 `kremaFrontendBuild`，故前端命令缺一不可；
+     * 前端产物本身不是这几条用例的断言点，只为了让流水线走得通。
+     */
+    private fun writeBundleProject(projectDir: File): File {
         writeSettings(projectDir)
-        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
+        writeToml(projectDir)
+        writeMainJava(projectDir)
+        val fakeNpm = fakeNpm(projectDir, FRONTEND_BUILD_SCRIPT)
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
-        writeToml(projectDir)
+        return fakeNpm
+    }
 
-        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_PROD, fakeNpm = fakeNpm)
+    @Test
+    @DisplayName("便携包 app-image 自带可执行运行时")
+    fun distBundleShipsRuntime(
+        @TempDir projectDir: File,
+    ) {
+        val fakeNpm = writeBundleProject(projectDir)
 
-        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome, result.output)
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_DIST_PROD, fakeNpm = fakeNpm)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_DIST_PROD}")?.outcome, result.output)
+        val image = appImageDir(projectDir, "dist", "prod")
+        val java = image.resolve("lib/runtime/bin/java" + exeSuffix())
+        assertTrue(java.toFile().canExecute(), "app-image 里没有可执行的运行时 java：\n${result.output}")
         assertTrue(
-            projectDir
-                .toPath()
-                .resolve("build/krema/prod")
-                .toFile()
-                .exists(),
-            "kremaBundleProd 没落 prod 产物目录",
+            image.resolve("bin").toFile().isDirectory,
+            "app-image 里没有启动器目录：\n${result.output}",
+        )
+        // 启动器按 manifest 里的 Main-Class 找主类；对不上时 jpackage 照样成功，产物却起不来。
+        assertEquals(
+            MAIN_CLASS,
+            jarManifest(appJar(projectDir, "prod"))["Main-Class"],
+            "app jar 的 Main-Class 应当与主类产出对得上：\n${result.output}",
         )
     }
 
     @Test
-    @DisplayName("dev 与 prod 档产物目录分离")
-    fun bundleDevProdSeparateDirs(
+    @DisplayName("便携包 zip 装的是那份 app-image")
+    fun distBundleZipsAppImage(
+        @TempDir projectDir: File,
+    ) {
+        val fakeNpm = writeBundleProject(projectDir)
+
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_DIST_PROD, fakeNpm = fakeNpm)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_DIST_PROD}")?.outcome, result.output)
+        val zip = portableZip(projectDir, "prod")
+        assertTrue(zip.toFile().isFile, "便携包没落 $zip：\n${result.output}")
+        val entries = zipEntries(zip)
+        assertTrue(
+            entries.any { it.startsWith("$APP_IMAGE_DIR_NAME/lib/runtime/bin/") },
+            "zip 里没有 app-image 的运行时：\n$entries",
+        )
+        assertTrue(
+            entries.any { it == "$APP_IMAGE_DIR_NAME/lib/app/$APP_NAME.jar" },
+            "zip 里没有 app-image 的 app jar：\n$entries",
+        )
+        // zip 落在被打的目录里，不排掉产物自身就会把它收进去，解开多出一个空壳同名文件。
+        assertTrue(
+            entries.none { it.endsWith(".zip") },
+            "zip 不该把自己收进去：\n$entries",
+        )
+    }
+
+    @Test
+    @DisplayName("prod 的 app jar 带前端资产")
+    fun prodJarHasFrontend(
+        @TempDir projectDir: File,
+    ) {
+        val fakeNpm = writeBundleProject(projectDir)
+
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_DIST_PROD, fakeNpm = fakeNpm)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_DIST_PROD}")?.outcome, result.output)
+        val entries = jarEntries(appJar(projectDir, "prod"))
+        assertTrue(
+            entries.contains("web/index.html"),
+            "prod 的 app jar 该带上前端资产：\n$entries",
+        )
+    }
+
+    @Test
+    @DisplayName("前端产物目录认 krema.toml 的 out_dir")
+    fun frontendHonorsOutDir(
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
+        writeMainJava(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("krema.toml"),
+            """
+            [package]
+            name = "consumer-app"
+            identifier = "com.example.app"
+            version = "0.1.0"
+
+            [build]
+            out_dir = "custom-dist"
+            """.trimIndent(),
+        )
+        val fakeNpm =
+            fakeNpm(
+                projectDir,
+                "mkdir -p custom-dist\necho '<html></html>' > custom-dist/index.html",
+            )
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
-        writeToml(projectDir)
+
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_DIST_PROD, fakeNpm = fakeNpm)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_DIST_PROD}")?.outcome, result.output)
+        // 前端命令是用户给的，产物落在哪由 out_dir 说了算；插件不认它就会读空目录，app jar 里没有 web/。
+        val entries = jarEntries(appJar(projectDir, "prod"))
+        assertTrue(
+            entries.contains("web/index.html"),
+            "out_dir 改了却没跟着收进 app jar：\n$entries",
+        )
+    }
+
+    @Test
+    @DisplayName("dev 的 app jar 不带前端资产")
+    fun devJarHasNoFrontend(
+        @TempDir projectDir: File,
+    ) {
+        val fakeNpm = writeBundleProject(projectDir)
+
+        val result = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_DIST_DEV, fakeNpm = fakeNpm)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_DIST_DEV}")?.outcome, result.output)
+        val entries = jarEntries(appJar(projectDir, "dev"))
+        assertTrue(
+            entries.none { it.startsWith("web/") },
+            "dev 档走 devUrl 拉前端，app jar 不该带上前端资产：\n$entries",
+        )
+    }
+
+    @Test
+    @DisplayName("四种形态与档位的产物目录分离")
+    fun bundleDirsSplitByFormAndTier(
+        @TempDir projectDir: File,
+    ) {
+        val fakeNpm = writeBundleProject(projectDir)
 
         val result =
             runGradleWithFakeNpm(
                 projectDir,
-                KremaTaskNames.BUNDLE_DEV,
-                KremaTaskNames.BUNDLE_PROD,
+                KremaTaskNames.BUNDLE_DIST_DEV,
+                KremaTaskNames.BUNDLE_DIST_PROD,
+                KremaTaskNames.BUNDLE_PLATFORM_DEV,
+                KremaTaskNames.BUNDLE_PLATFORM_PROD,
                 fakeNpm = fakeNpm,
             )
 
-        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_DEV}")?.outcome, result.output)
-        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome, result.output)
-        assertTrue(
-            projectDir
-                .toPath()
-                .resolve("build/krema/dev")
-                .toFile()
-                .exists(),
-            "dev 档没落 build/krema/dev",
-        )
-        assertTrue(
-            projectDir
-                .toPath()
-                .resolve("build/krema/prod")
-                .toFile()
-                .exists(),
-            "prod 档没落 build/krema/prod",
-        )
-    }
-
-    @Test
-    @DisplayName("kremaBundleProd 二次执行命中 UP-TO-DATE")
-    fun bundleProdUpToDate(
-        @TempDir projectDir: File,
-    ) {
-        writeSettings(projectDir)
-        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
-        Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
-        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), frontendBuildGradle(fakeNpm.absolutePath))
-        writeToml(projectDir)
-
-        val first = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_PROD, fakeNpm = fakeNpm)
-        assertEquals(TaskOutcome.SUCCESS, first.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome, first.output)
-
-        val second = runGradleWithFakeNpm(projectDir, KremaTaskNames.BUNDLE_PROD, fakeNpm = fakeNpm)
-        assertEquals(
-            TaskOutcome.UP_TO_DATE,
-            second.task(":${KremaTaskNames.BUNDLE_PROD}")?.outcome,
-            "二次执行 kremaBundleProd 应当 UP-TO-DATE：\n${second.output}",
-        )
+        BUNDLE_TASKS.forEach { name ->
+            assertEquals(TaskOutcome.SUCCESS, result.task(":$name")?.outcome, "$name 没成功：\n${result.output}")
+        }
+        listOf("dist/dev", "dist/prod", "platform/dev", "platform/prod").forEach { path ->
+            assertTrue(
+                appImageDir(projectDir, *path.split("/").toTypedArray()).toFile().isDirectory,
+                "$path 下没有 app-image：\n${result.output}",
+            )
+        }
     }
 
     @Test
@@ -357,7 +591,7 @@ class KremaPluginTest {
         @TempDir projectDir: File,
     ) {
         writeSettings(projectDir)
-        val fakeNpm = fakeNpm(projectDir, "mkdir -p build/krema/dist\necho hi > build/krema/dist/index.html")
+        val fakeNpm = fakeNpm(projectDir, FRONTEND_BUILD_SCRIPT)
         val fakeDev = fakeDevServer(projectDir)
         Files.writeString(projectDir.toPath().resolve("package.json"), """{ "name": "consumer" }""")
         Files.writeString(
@@ -383,7 +617,7 @@ class KremaPluginTest {
             connection
                 .newBuild()
                 .forTasks(KremaTaskNames.BUNDLE_RUN_DEV)
-                .withArguments("--offline", "--configuration-cache", "-I", initScript.absolutePath)
+                .withArguments("--configuration-cache", "-I", initScript.absolutePath)
                 .withCancellationToken(tokenSource.token())
         launcher.setStandardOutput(FileOutputStream("/tmp/krema-run.log"))
         launcher.setStandardError(FileOutputStream("/tmp/krema-run.log"))
@@ -391,19 +625,199 @@ class KremaPluginTest {
         val buildThread = Thread { runCatching { launcher.run() }.onFailure { buildFailure = it } }
         buildThread.start()
 
-        val appUp = waitForProc("com.example.app.Main")
-        val devUp = waitForProc("devserver")
-        dumpProcs("/tmp/krema-procs.log")
+        // 盯启动器自己的路径，而不是主类名：jpackage 产出的原生启动器把 JVM 跑在自己进程里，
+        // 命令行上只有启动器路径，`com.example.app.Main` 一个字都不会出现。
+        // 拿主类名当 marker 反而会撞上打包期的 jpackage 进程（它带 `--main-class` 参数），
+        // 于是「等进程出现」等到了 jpackage、「等进程消失」等到了 jpackage 退出，
+        // 断言全程为真却与 run task 起的应用进程无关——回收真坏掉也照样绿。
+        val appMarker = launcherPath(projectDir, "dev").toString()
+        val appUp = waitForProc(appMarker)
+        // dev server 同样盯绝对路径，而不是 `devserver` 这个文件名：marker 是全机器匹配的，
+        // 上一轮跑剩的孤儿（父进程已退出、被 init 收养）会一直让 `waitGone("devserver")` 假阴性，
+        // 于是这条断言测的是「机器上恰好没有别的 dev server」，与本次构建的回收无关。
+        val devMarker = fakeDev.absolutePath
+        val devUp = waitForProc(devMarker)
+        dumpProcs("/tmp/krema-procs.log", projectDir)
         if (!appUp) error("app 进程没起来；buildFailure=${buildFailure?.stackTraceToString()}\n见 /tmp/krema-run.log / /tmp/krema-procs.log")
         assertTrue(devUp, "dev server 进程没起来，无法验证回收")
         // 等价于 Ctrl-C：取消本次构建，守护进程据此打断 run task 线程、触发 cleanup 回收进程树。
         tokenSource.cancel()
         buildThread.join(60_000)
 
-        assertTrue(waitGone("com.example.app.Main"), "run 中断后 app 进程仍存活")
-        assertTrue(waitGone("devserver"), "run 中断后 dev server 进程仍存活")
+        assertTrue(waitGone(appMarker), "run 中断后 app 进程仍存活")
+        assertTrue(waitGone(devMarker), "run 中断后 dev server 进程仍存活")
         connection.close()
     }
+
+    @Test
+    @DisplayName("每个平台包格式映射到所属平台与 jpackage type")
+    fun formatsMapToPlatformAndType() {
+        val expected =
+            mapOf(
+                "app" to (Platform.DARWIN to "app-image"),
+                "dmg" to (Platform.DARWIN to "dmg"),
+                "pkg" to (Platform.DARWIN to "pkg"),
+                "exe" to (Platform.WINDOWS to "exe"),
+                "msi" to (Platform.WINDOWS to "msi"),
+                "appimage" to (Platform.LINUX to null),
+                "deb" to (Platform.LINUX to "deb"),
+                "rpm" to (Platform.LINUX to "rpm"),
+            )
+
+        assertEquals(
+            expected.keys.sorted(),
+            BundleFormat.entries.map { it.id }.sorted(),
+            "平台包格式清单与 GLOSSARY 的「平台包」词条不一致",
+        )
+        BundleFormat.entries.forEach {
+            assertEquals(expected.getValue(it.id), it.platform to it.jpackageType, "格式 $it 的平台或 jpackage type 不对")
+        }
+    }
+
+    @Test
+    @DisplayName("bundling 只取宿主平台的平台包子集")
+    fun bundlingKeepsOnlyHostFormats(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), bundlingGradle())
+        val expected =
+            mapOf(
+                Platform.DARWIN to listOf("dmg:DARWIN"),
+                Platform.WINDOWS to listOf("msi:WINDOWS"),
+                Platform.LINUX to listOf("appimage:LINUX", "deb:LINUX"),
+            )
+
+        val result = runGradle(projectDir, REPORT_TASK)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":$REPORT_TASK")?.outcome, result.output)
+        val picked =
+            result.output
+                .substringAfter("formats=", "")
+                .substringBefore('\n')
+                .trim()
+                .split(",")
+                .filter { it.isNotEmpty() }
+        assertEquals(
+            expected[PlatformDetector.detect()].orEmpty(),
+            picked,
+            "跨平台写的格式列表应当只留下宿主平台的子集：\n${result.output}",
+        )
+    }
+
+    @Test
+    @DisplayName("运行时镜像里有可执行 java 且小于全量 JDK")
+    fun runtimeImageSlimmerThanJdk(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            """plugins { id("top.birthcat.kremaf.ext") }""",
+        )
+        writeToml(projectDir)
+        writeMainJava(projectDir)
+
+        val result = runGradle(projectDir, KremaTaskNames.RUNTIME_IMAGE)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":${KremaTaskNames.RUNTIME_IMAGE}")?.outcome, result.output)
+        val image = projectDir.toPath().resolve("build/krema/runtime")
+        assertTrue(
+            image.resolve("bin/java").toFile().canExecute(),
+            "运行时镜像里没有可执行的 bin/java：\n${result.output}",
+        )
+        assertTrue(
+            treeSize(image.toFile()) < treeSize(File(System.getProperty("java.home"))),
+            "运行时镜像应比全量 JDK 小，否则说明 jlink 没生效：\n${result.output}",
+        )
+    }
+
+    @Test
+    @DisplayName("platformFormats 为空不出平台包也不报错")
+    fun emptyFormatsSkipBundles(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(projectDir.toPath().resolve("build.gradle.kts"), bundlingGradle(""))
+
+        val result = runGradle(projectDir, REPORT_TASK)
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":$REPORT_TASK")?.outcome, result.output)
+        val picked =
+            result.output
+                .substringAfter("formats=", "")
+                .substringBefore('\n')
+                .trim()
+        assertEquals("", picked, "默认空集合时不该出任何平台包：\n${result.output}")
+    }
+
+    /**
+     * 写一份带报告 task 的 `build.gradle.kts`。
+     *
+     * [formats] 为空串时不写 `bundling { }` 块，用的是默认空集合 —— 空集合下 `.get()` 不炸
+     * 正是这条用例要守的。
+     */
+    private fun bundlingGradle(formats: String = ALL_FORMATS): String {
+        val name = REPORT_TASK
+        val bundling =
+            if (formats.isEmpty()) {
+                ""
+            } else {
+                """
+                krema {
+                    bundling {
+                        platformFormats = setOf($formats)
+                    }
+                }
+                """.trimIndent()
+            }
+        return """
+            import top.birthcat.kremaf.ext.gradle.BundleFormat
+            import top.birthcat.kremaf.ext.gradle.PlatformDetector
+
+            plugins { id("top.birthcat.kremaf.ext") }
+
+            $bundling
+
+            tasks.register("$name") {
+                val host = PlatformDetector.detect().name
+                val picked = krema.bundling.formatsForHost().map { it.id + ":" + it.platform.name }
+                doLast {
+                    println("host=" + host)
+                    println("formats=" + picked.joinToString(","))
+                }
+            }
+            """.trimIndent()
+    }
+
+    @Test
+    @DisplayName("运行时镜像二次执行命中 UP-TO-DATE")
+    fun runtimeImageUpToDate(
+        @TempDir projectDir: File,
+    ) {
+        writeSettings(projectDir)
+        Files.writeString(
+            projectDir.toPath().resolve("build.gradle.kts"),
+            """plugins { id("top.birthcat.kremaf.ext") }""",
+        )
+        writeToml(projectDir)
+        writeMainJava(projectDir)
+
+        val first = runGradle(projectDir, KremaTaskNames.RUNTIME_IMAGE)
+
+        assertEquals(TaskOutcome.SUCCESS, first.task(":${KremaTaskNames.RUNTIME_IMAGE}")?.outcome, first.output)
+
+        val second = runGradle(projectDir, KremaTaskNames.RUNTIME_IMAGE)
+
+        assertEquals(
+            TaskOutcome.UP_TO_DATE,
+            second.task(":${KremaTaskNames.RUNTIME_IMAGE}")?.outcome,
+            "classpath 输入没变时运行时镜像应当 UP-TO-DATE：\n${second.output}",
+        )
+    }
+
+    /** 目录内所有普通文件的字节数之和，用来比运行时镜像与全量 JDK 的体积。 */
+    private fun treeSize(root: File): Long = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     /** 复刻 GradleRunner 的插件 classpath 注入：把被测插件 jar/classes 加进所有 project 的 buildscript classpath。 */
     private fun pluginClasspathInitScript(projectDir: File): File {
@@ -441,13 +855,52 @@ class KremaPluginTest {
         return install
     }
 
+    /**
+     * 写一份 `build.gradle`，注册一张 task 把插件解析出的资产路径打印出来。
+     *
+     * 用 Groovy DSL 的 `apply plugin:`：插件 classpath 由 init 脚本注入 buildscript，
+     * `plugins { id(...) }` 那条路只认插件仓库，看不到注入的 classpath。
+     */
+    private fun assetsPathProbeGradle() =
+        """
+        apply plugin: "top.birthcat.kremaf.ext"
+
+        def loaderClass = Class.forName(
+            "top.birthcat.kremaf.ext.gradle.KremaConfigLoader", true, buildscript.classLoader)
+
+        tasks.register("$ASSETS_PATH_PROBE") {
+            def toml = layout.projectDirectory.file("krema.toml").asFile.toPath()
+            doLast {
+                println("assetsPath=" + loaderClass.newInstance().loadOrDefault(toml).build.assetsPath)
+            }
+        }
+        """.trimIndent()
+
+    /**
+     * 与 [runGradle] 同款，但用 init 脚本把被测插件的 classpath 注入 buildscript。
+     *
+     * `withPluginClasspath()` 只让 `plugins { id(...) }` 找得到插件，构建脚本自身拿不到插件的类；
+     * 探针要直接调插件的 API，只能走 [pluginClasspathInitScript] 那条注入路径。
+     */
+    private fun runGradleWithPluginClasspath(
+        projectDir: File,
+        vararg args: String,
+    ): BuildResult {
+        val initScript = pluginClasspathInitScript(projectDir)
+        return GradleRunner
+            .create()
+            .withProjectDir(projectDir)
+            .withArguments("--configuration-cache", "--stacktrace", "-I", initScript.absolutePath, *args)
+            .build()
+    }
+
     private fun writeToml(projectDir: File) {
         Files.writeString(
             projectDir.toPath().resolve("krema.toml"),
             """
             [package]
             name = "consumer-app"
-            identifier = "com.example.consumer"
+            identifier = "com.example.app"
             version = "0.1.0"
             """.trimIndent(),
         )
@@ -603,16 +1056,18 @@ class KremaPluginTest {
                 .contains(marker)
         }
 
-    private fun dumpProcs(path: String) {
+    /** 诊断用：把本项目相关的进程命令行落盘。按项目目录过滤，别把全机器的 gradle/java 都塞进来。 */
+    private fun dumpProcs(
+        path: String,
+        projectDir: File,
+    ) {
         val sb = StringBuilder()
         ProcessHandle.current().descendants().toList().forEach { h ->
             sb.appendLine("DESC: ${h.info().commandLine().orElse("")}")
         }
         ProcessHandle.allProcesses().forEach { h ->
             val cl = h.info().commandLine().orElse("")
-            if (cl.contains("devserver") || cl.contains("com.example.app") || cl.contains("gradle")) {
-                sb.appendLine("ALL: $cl")
-            }
+            if (cl.contains(projectDir.absolutePath)) sb.appendLine("ALL: $cl")
         }
         File(path).writeText(sb.toString())
     }

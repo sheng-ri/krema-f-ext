@@ -59,7 +59,7 @@ abstract class KremaBundleRunTask : KremaConfigTask() {
             cleanup.register(devServer)
         }
 
-        val app = bundler.launch(bundler.bundlePath(settings, dev.get()), emptyMap())
+        val app = bundler.launch(settings, emptyMap())
         cleanup.register(app)
         // 轮询式等待：java 的 waitFor() 默认无视线程中断会卡死任务线程，导致构建取消时收不到收尾信号。
         // 一旦被中断（Ctrl-C）就退出循环，在 finally 里直接回收进程树，不依赖 daemon 的 close 时机。
