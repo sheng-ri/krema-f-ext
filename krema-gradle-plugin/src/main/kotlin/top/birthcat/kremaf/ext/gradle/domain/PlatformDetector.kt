@@ -2,7 +2,7 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle
+package top.birthcat.kremaf.ext.gradle.domain
 
 import java.io.File
 import java.util.Locale
@@ -67,26 +67,46 @@ enum class Platform {
             }
         }
     }
-}
 
-/**
- * bundle 的分发形态：分发形态 × 构建档位 = 四张打包 task，见 [top.birthcat.kremaf.ext.gradle.BundleForm]。
- */
-enum class BundleForm(
-    /** 进产物路径的稳定标识，与枚举名解耦。 */
-    val id: String,
-    /** 该形态的产物是否还要再打一份便携包 zip。 */
-    val zipped: Boolean,
-) {
-    /** 便携包：不分平台的 app-image 目录 + zip，解压即用。 */
-    DIST("dist", true),
-
-    /** 平台包：本平台原生的可安装件，具体格式由 [BundleFormat] 选。 */
-    PLATFORM("platform", false),
+    /** 图标文件后缀，按平台推断：`krema.toml` 的 `[bundle].icon` 按此后缀兜底匹配。 */
+    fun iconSuffix(): String =
+        when (this) {
+            DARWIN -> "icns"
+            WINDOWS -> "ico"
+            LINUX -> "png"
+            UNKNOWN -> error("无法为未知平台推断图标后缀：$this")
+        }
 }
 
 /** 当前平台的可执行文件后缀，Windows 上为 `.exe`。 */
 internal fun executableSuffix(): String = if (File.separatorChar == '\\') ".exe" else ""
+
+/**
+ * 把用户写的一行命令变成 `ProcessBuilder` / `ExecOperations` 用的 argv。
+ *
+ * Windows 上必须借道 `cmd /c`：Node 系工具装出来的入口是 `npm.cmd` / `npm.ps1`，
+ * 而 `CreateProcess` 只给无扩展名的命令补 `.exe`，直接起 `npm` 会报「系统找不到指定的文件」。
+ * 走 `cmd` 顺带把 `&&`、管道这些 shell 语法兑现给用户 —— 配置项本来的语义就是「一整行命令」。
+ * 其余平台不套 shell：少一层进程，退出码与信号直达。
+ */
+internal fun commandLineFor(command: String): List<String> = commandLineFor(command, PlatformDetector.detect())
+
+/**
+ * 把一行命令变成 argv，显式给定平台（便于单测 Windows 借道分支）。
+ *
+ * Windows 上借道 `cmd /c`：见 [commandLineFor] 的 why。
+ */
+internal fun commandLineFor(
+    command: String,
+    platform: Platform,
+): List<String> {
+    val trimmed = command.trim()
+    return if (platform == Platform.WINDOWS) {
+        listOf("cmd", "/c", trimmed)
+    } else {
+        trimmed.split(Regex("\\s+"))
+    }
+}
 
 /**
  * jpackage app-image 的目录名。

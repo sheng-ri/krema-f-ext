@@ -2,11 +2,12 @@
  * Copyright (c) 2026 BirthCat
  * SPDX-License-Identifier: Apache 2.0
  */
-package top.birthcat.kremaf.ext.gradle
+package top.birthcat.kremaf.ext.gradle.task
 
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.tasks.OutputDirectory
-import org.gradle.work.DisableCachingByDefault
+import top.birthcat.kremaf.ext.gradle.config.BundleSettings
+import top.birthcat.kremaf.ext.gradle.config.KremaExtension
 import java.nio.file.Path
 
 /**
@@ -15,7 +16,6 @@ import java.nio.file.Path
  * 配置输入在 [KremaConfigTask] 上；这里只补一个 `@OutputDirectory` 的 `outputDir`，
  * 并据此给出不传目录参数的 [bundleSettings] 便捷重载。
  */
-@DisableCachingByDefault(because = "产物是按本机平台落盘的启动器与密钥，不做跨机器复用")
 abstract class KremaProjectTask : KremaConfigTask() {
     /** 产物根目录。 */
     @get:OutputDirectory

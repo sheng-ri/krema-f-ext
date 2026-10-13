@@ -1,9 +1,10 @@
-# 门禁只有一件事：编译过、格式干净、测试绿。
-# 端到端（真开窗口）不进这里 —— 测的是 Krema 运行时，不是本插件。
+# 门禁：编译过、格式干净、单测绿；再加一条真跑 demo 的 e2e 验收（允许联网）。
+# 端到端只验「产物结构 + 启动器能跑」，不真开窗口 —— 开窗口是 Krema 运行时的事，不是本插件。
 .verify: &verify
-  name: 构建与格式检查
+  name: 构建与格式检查 + e2e
   script:
     - ./gradlew spotlessCheck test --configuration-cache
+    - bash scripts/e2e.sh
 
 # 构建环境：本仓 Dockerfile 动态构建，平台按 hash 缓存。
 # Gradle 缓存挂到构建节点，跨流水线复用依赖与 wrapper。
@@ -40,10 +41,10 @@ $:
         - vscode
         - docker
       runner:
-        cpus: 4
+        cpus: 6
       # 每次打开开发环境自动执行，安装 skills。
       env:
-        CNB_WELCOME_CMD: bash /workspace/install-skills.sh
+        CNB_WELCOME_CMD: bash /workspace/scripts/install-skills.sh
 
   pull_request:
     verify:

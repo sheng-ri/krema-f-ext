@@ -10,16 +10,16 @@ object KremaTaskNames {
     const val INIT = "kremaInit"
     const val BUILD = "kremaBuild"
 
-    /** 便携包（dist）：jpackage 的 app-image 目录 + 一份 zip，解压即用。 */
-    const val BUNDLE_DIST_DEV = "kremaBundleDistDev"
-    const val BUNDLE_DIST_PROD = "kremaBundleDistProd"
+    /** 未压缩、可直接运行的 app-image 目录：`kremaBundle` 产出，是所有平台包的共同底座。 */
+    const val BUNDLE = "kremaBundle"
 
-    /** 平台包（platform）：本平台原生的可安装件，各格式在 #62 接上。 */
-    const val BUNDLE_PLATFORM_DEV = "kremaBundlePlatformDev"
-    const val BUNDLE_PLATFORM_PROD = "kremaBundlePlatformProd"
+    /** 平台包聚合 task：依赖本平台配置了的各 `kremaPlatform<格式>` task，没配格式时空跑成功。 */
+    const val BUNDLE_PLATFORM = "kremaBundlePlatform"
 
-    const val BUNDLE_RUN_DEV = "kremaBundleRunDev"
-    const val BUNDLE_RUN_PROD = "kremaBundleRunProd"
+    /** 开发期：起 classpath 上的应用进程并注入 `KREMA_DEV_URL`。 */
+    const val DEV_RUN = "kremaDevRun"
+
+    const val BUNDLE_RUN = "kremaBundleRun"
     const val SIGNER_GENERATE = "kremaSignerGenerate"
     const val SIGNER_SIGN = "kremaSignerSign"
 
@@ -29,22 +29,29 @@ object KremaTaskNames {
     /** 运行时镜像 task：用 jdeps 推导模块、jlink 裁出最小运行时，产出 jpackage 要用的 `--runtime-image`。 */
     const val RUNTIME_IMAGE = "kremaRuntimeImage"
 
-    /** 便携包 zip task 的名后缀：它是打包 task 的收尾，故不进 [ALL]。 */
-    const val ZIP_SUFFIX = "Zip"
+    /**
+     * jdeps 检视 task：打印推导出的模块清单 / `-v` 逐包明细。
+     *
+     * 这两张挂在 krema 分组却用 `jdeps` 前缀（其余 task 一律 `krema` 前缀）：它们对应的正是 jdeps
+     * 的两个互斥开关——`-verbose` 与 `--print-module-deps` 不能同时给，同一张 task 切不出这个差别。
+     */
+    const val JDEPS_MODULES = "jdepsModules"
 
-    /** 全部 task 名，声明顺序即 `gradlew tasks` 里的出现顺序。 */
+    const val JDEPS_MODULES_VERBOSE = "jdepsModulesVerbose"
+
+    /** 全部静态 task 名，声明顺序即 `gradlew tasks` 里的出现顺序。按需注册的 `kremaPlatform<格式>` 不在此列。 */
     val ALL =
         listOf(
             INIT,
             BUILD,
             FRONTEND_BUILD,
             RUNTIME_IMAGE,
-            BUNDLE_DIST_DEV,
-            BUNDLE_DIST_PROD,
-            BUNDLE_PLATFORM_DEV,
-            BUNDLE_PLATFORM_PROD,
-            BUNDLE_RUN_DEV,
-            BUNDLE_RUN_PROD,
+            JDEPS_MODULES,
+            JDEPS_MODULES_VERBOSE,
+            BUNDLE,
+            BUNDLE_PLATFORM,
+            DEV_RUN,
+            BUNDLE_RUN,
             SIGNER_GENERATE,
             SIGNER_SIGN,
         )

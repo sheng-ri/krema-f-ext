@@ -8,55 +8,46 @@
 Gradle 构建脚本里唯一的 Krema 配置入口。所有构建输入（含配置文件的位置）都在 `krema { }` 里给出；不写 `krema { }` 意味着采用它自己的默认值。
 _Avoid_: krema.toml（不再是配置源，只在 `krema` 块显式指定路径时作为默认值来源）、命令行开关
 
-**构建档位（dev / prod）**:
-产物形态的两档。它不是"调了什么命令"，而是"产出什么形态的东西"。共两档，不扩展。
-_Avoid_: profile、variant、环境、flavor
-
-**dev 档位**:
-拿到本机开发用产物的那一档。与 prod 的差别由插件规定：dev 不把前端产物收进 classpath，应用转而从 devUrl 拉前端；
-prod 把前端产物收进 classpath，可脱离开发环境分发。两档之间差什么不是交给使用方配置的开放项。
-_Avoid_: 开发模式、debug、profile
-
-**prod 档位**:
-拿到可分发的那一档产物。这是默认档。
-_Avoid_: release、生产环境
-
 **bundle**:
-一个自带最小运行时的可分发产物。拆成两个正交维度：**分发形态**（便携包 / 平台包）与**构建档位**（dev / prod），
-四张 task 是这两个维度的组合。bundle 是构建的产物，不是「发行时才走」的一个步骤。
-_Avoid_: 包、安装包、package
+`kremaBundle` 的产出：一个自带最小运行时、**未压缩、可直接运行**的 app-image 目录。它是后续所有平台包的共同底座，
+本身不是分发给用户装的东西。
+_Avoid_: 包、安装包、package、便携包（zip 形态已不存在）
 
-**分发形态**:
-bundle 的形态维度，只有两种：**便携包**（dist，跨平台统一的 zip）与**平台包**（platform，本平台原生的可安装件）。
-每种形态各有两张 dev / prod task。
-_Avoid_: 档位、variant
-
-**便携包**（dist）:
-不分平台的分发形态：jpackage 产出的 app-image 目录，外加一份 `<app>-<version>-<target>.zip`。解压即用，不需安装。
-_Avoid_: 免安装版、portable（与「便携包」同义，但中英混排时统一用中文术语）
-
-**平台包**（platform）:
+**平台包**:
 本平台原生的可安装件，由 `BundleFormat` 枚举配置要出哪些：macOS 出 `.app`/`.dmg`/`.pkg`，Windows 出 `.exe`/`.msi`，
-Linux 出 `.AppImage`/`.deb`/`.rpm`。列表可空——空即本平台不出平台包。
-_Avoid_: 安装包（泛称，不区分形态）、native 包
+Linux 出 `.AppImage`/`.deb`/`.rpm`。配了几个格式就注册几张 `kremaPlatform<格式>` task，列表为空即不出平台包。
+_Avoid_: 安装包（泛称，不区分形态）、native 包、分发形态（该维度已删除）
 
 **运行时镜像**（runtime image）:
 一份最小化的 Java 运行时，由 jlink 从应用实际用到的模块裁出，随 bundle 分发。使用方机器无需预装 JDK。
 _Avoid_: JRE、jlink 产物
+
+**运行时模块清单**（runtime modules）:
+决定裁进运行时镜像的 JDK 模块名集合。两个来源：默认由 jdeps 按应用 classpath 推导；
+`krema { runtime { modules } }` 非空时由使用方指定，**取代**推导。
+_Avoid_: jdeps 推导结果、模块列表（两者都指同一个东西，且「模块列表」没说清是给谁用的）
 
 **应用身份**（bundle identity）:
 让原生特性认出「这是一个应用」的形态：macOS 上是 `.app` 目录。此前 GLOSSARY 把「bundle」定义成这个东西，
 现已与「bundle」区分开——它是 bundle 的必要属性之一，不是 bundle 本身。
 _Avoid_: bundle（指称身份时）
 
-**资产路径**（assets_path）:
-前端产物在 Java classpath 中的落点，默认 `web`。前端 `dist` 进的是 app jar 里的这个路径，不是 bundle 目录下的某个文件夹。
-_Avoid_: 前端目录、dist 目录（指 classpath 上的落点时）
+**前端资产**:
+前端产物在独立 assets jar 里的落点目录，字面固定为 `assets`。Krema 主类用 `prodAssets("/assets")` 按它读，
+两边必须字面一致，所以不开放配置。前端是「整个应用」的资源，由 `kremaBuild` 打成单独的 assets jar 落到 classpath 上，
+而不是合并进后端 app jar：Krema 从整个 classpath 扫 `assets/*`，独立 jar 同样能被读到，后端 app jar 得以保持纯粹。
+_Avoid_: 资产路径（这个可配项已不存在）、前端目录（那是磁盘上的目录，不是 jar 里的落点）
+
+**前端目录**:
+前端工程所在的目录：`package.json`、`node_modules`、前端源码与 `dist` 都在它下面，前端命令也在它里面执行。
+由 `frontend_dir` 配，不配就是项目根—— 于是既有项目不写这个键也照旧。
+_Avoid_: 前端资产（jar 里的落点）、dist 目录（只是前端目录下的一个子目录）
 
 **应用进程**:
 由 Krema 主类启动的那个 JVM 进程，WebView 与原生窗口都在它里面。
 _Avoid_: 后端
 
 **dev server 进程**:
-前端热更新服务的进程。与应用进程是两个独立进程，但生命周期同起同落。
+前端热更新服务的进程。与应用进程是两个独立进程，**由使用方自己起停**——插件不托管它，也不为它提供 task。
+`kremaDevRun` 只把它的地址作为环境变量交给应用进程，用不用由应用代码决定。
 _Avoid_: 前端（指进程时）

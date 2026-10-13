@@ -5,4 +5,12 @@ bin/
 *.iml
 .idea/
 .vscode/
+node_modules/
+dist/
+.kotlin
+
+# processor 生成物：每次 compileJava 都会重写，提交会导致与后端命令表脱节。
+# 门禁里的 compileJava 保证它一定存在，IDE 与 tsc 需要时先跑一次编译即可。
+krema-demo/front/src/krema-commands.d.ts
 !.cnb/build/
+/.scratch

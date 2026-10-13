@@ -38,3 +38,9 @@ npx --yes skills add "https://cnb.cool/BirthCat/mirror/humanlayer-skills.git" \
   -s visual-pr \
   -g \
   -y
+
+npx --yes skills add "https://cnb.cool/c.d/caveman.git" \
+  -a codebuddy \
+  -s caveman \
+  -g \
+  -y

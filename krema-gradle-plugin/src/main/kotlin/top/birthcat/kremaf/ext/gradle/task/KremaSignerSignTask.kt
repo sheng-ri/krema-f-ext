@@ -11,8 +11,7 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
-import top.birthcat.kremaf.ext.gradle.Ed25519Signer
-import top.birthcat.kremaf.ext.gradle.KremaProjectTask
+import top.birthcat.kremaf.ext.gradle.tool.Ed25519Signer
 
 /** 用私钥给产物签名。 */
 @DisableCachingByDefault(because = "签名依赖私钥，且输入含密钥本身")
