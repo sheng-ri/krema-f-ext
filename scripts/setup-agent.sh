@@ -46,13 +46,6 @@ npx --yes skills add "https://cnb.cool/c.d/caveman.git" \
   -g \
   -y
 
-npx --yes skills add https://github.com/Kotlin/kotlinx-rpc \
-  -s gradle_expert \
-  -a codebuddy \
-  -g \
-  -y
-
-
 curl -Ls https://sh.jbang.dev | bash -s - app setup
 mkdir ~/.config/mcp
 
