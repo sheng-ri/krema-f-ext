@@ -14,3 +14,4 @@ dist/
 krema-demo/front/src/krema-commands.d.ts
 !.cnb/build/
 /.scratch
+/.pnpm-store

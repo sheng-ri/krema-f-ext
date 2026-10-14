@@ -1,11 +1,6 @@
-rootProject.name = "krema-f-ext"
-
-include("krema-gradle-plugin")
-include("krema-demo")
+rootProject.name = "krema-demo"
 
 pluginManagement {
-    includeBuild("krema-gradle-plugin") { name = "krema-plugin-build" }
-
     repositories {
         maven {
             url = uri("https://maven.cnb.cool/BirthCat-Dev/jars/-/packages/")
@@ -13,6 +8,7 @@ pluginManagement {
         gradlePluginPortal()
         mavenCentral()
     }
+    includeBuild("../krema-gradle-plugin")
 }
 
 dependencyResolutionManagement {
@@ -22,5 +18,10 @@ dependencyResolutionManagement {
             url = uri("https://maven.cnb.cool/BirthCat-Dev/jars/-/packages/")
         }
         mavenCentral()
+    }
+    versionCatalogs {
+        create("libs") {
+            from(files("../gradle/libs.versions.toml"))
+        }
     }
 }
