@@ -44,9 +44,13 @@ class TemplateGenerator {
         |package ${settings.javaPackage};
         |
         |import build.krema.core.Krema;
+        |import build.krema.core.platform.NativeLibraryLoader
         |
         |public final class Main {
         |    public static void main(String[] args) {
+        |        if (System.getProperty("os.name").lowercase().contains("win")) {
+        |            NativeLibraryLoader.load("libwinpthread-1")
+        |        }
         |        // 开发期读 KREMA_DEV_URL 指到使用方自己的前端 dev server；没设就用内建默认。
         |        String devUrl = System.getenv("KREMA_DEV_URL");
         |        Krema.app()

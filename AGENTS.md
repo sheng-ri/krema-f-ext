@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## 行为规范
+
+- 检查skill authoring-gradle-builds是否存在，不存在则执行install_gradle_skills
+
 ## 文档规范
 
 - `AGENTS.md` 只写约束。写「必须 / 禁止 / 优先」。
@@ -22,7 +26,7 @@
 
 ## 提交规范
 
-- pr最终合并的commit遵循`[chore,ref,feat,fix]:` 开头, 末尾引用issue结尾。例: `feat: 一个功能 (#1)`
+- pr最终合并的commit遵循`[chore,ref,feat,fix]:` 开头, 如果其关联issue，应该在末尾引用issue结尾。例: `feat: 一个功能 (#1)`
 
 ## Agent skills
 
