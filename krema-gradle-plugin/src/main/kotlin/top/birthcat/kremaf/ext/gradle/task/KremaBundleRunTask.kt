@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle.task
 
+import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
@@ -35,6 +36,7 @@ abstract class KremaBundleRunTask : KremaConfigTask() {
     abstract val cleanupService: Property<KremaProcessCleanupService>
 
     @TaskAction
+    @Throws(GradleException::class)
     fun run() {
         val settings = bundleSettings(bundleDir.get().asFile.toPath())
         val bundler = PlatformBundler(target.get())
@@ -44,18 +46,29 @@ abstract class KremaBundleRunTask : KremaConfigTask() {
         cleanup.register(app)
         // 轮询式等待：java 的 waitFor() 默认无视线程中断会卡死任务线程，导致构建取消时收不到收尾信号。
         // 一旦被中断（Ctrl-C）就退出循环，在 finally 里直接回收进程树，不依赖 daemon 的 close 时机。
+        var interrupted = false
         try {
             while (true) {
                 try {
                     if (app.waitFor(500, TimeUnit.MILLISECONDS)) break
                 } catch (_: InterruptedException) {
                     Thread.currentThread().interrupt()
+                    interrupted = true
                     break
                 }
-                if (Thread.currentThread().isInterrupted()) break
+                if (Thread.currentThread().isInterrupted()) {
+                    interrupted = true
+                    break
+                }
             }
         } finally {
             cleanup.killAll()
+        }
+        // 应用自己退掉（而非被中断或回收）时，退出码非零就是启动失败：缺 jlink 模块、加载不了
+        // libwebview 这类都在窗口创建后几秒内崩掉。不判退出码的话 task 照样报成功，崩溃只留在日志里。
+        if (!interrupted) {
+            val code = app.exitValue()
+            if (code != 0) throw GradleException("应用进程以退出码 $code 结束，详见上方启动器输出")
         }
     }
 }
