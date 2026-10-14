@@ -19,12 +19,16 @@ fun main() {
     if (System.getProperty("os.name").lowercase().contains("win")) {
         NativeLibraryLoader.load("libwinpthread-1")
     }
-    Krema
-        .app()
-        .title("Krema Demo")
-        .identifier("com.example.kremademo")
-        .size(900, 640)
-        .prodAssets("/assets")
-        .commands(NoteCommands())
-        .run()
+    val app =
+        Krema
+            .app()
+            .title("Krema Demo")
+            .identifier("com.example.kremademo")
+            .size(1280, 1024)
+            .prodAssets("/assets")
+            .commands(NoteCommands())
+    // devUrl 一旦非空，krema-core 就整个走 dev 分支、不再起 AssetServer。
+    // 故只在真有 dev server 时才设：打包出来的 app 不带这个变量，走 prodAssets 出前端。
+    System.getenv("KREMA_DEV_URL")?.let { app.devUrl(it) }
+    app.run()
 }
