@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nodejs npm squashfs-tools patchelf file desktop-file-utils fakeroot unzip \
         xvfb x11-utils libwebkit2gtk-4.1-0 libgtk-3-0 imagemagick \
     && rm -rf /var/lib/apt/lists/*
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@12
 RUN curl -fsSL "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
         -o /usr/local/bin/appimagetool \
     && chmod +x /usr/local/bin/appimagetool

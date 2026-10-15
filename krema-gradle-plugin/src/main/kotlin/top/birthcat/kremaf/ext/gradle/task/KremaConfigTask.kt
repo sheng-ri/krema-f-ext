@@ -15,6 +15,7 @@ import top.birthcat.kremaf.ext.gradle.config.BundleSettings
 import top.birthcat.kremaf.ext.gradle.config.KremaConfig
 import top.birthcat.kremaf.ext.gradle.config.KremaConfigLoader
 import top.birthcat.kremaf.ext.gradle.config.KremaExtension
+import top.birthcat.kremaf.ext.gradle.config.resolveMainClass
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -73,8 +74,7 @@ abstract class KremaConfigTask : DefaultTask() {
     @Throws(IllegalStateException::class)
     protected fun config(): KremaConfig {
         val loaded = loadKremaConfig(configFilePath.get(), configFileSetExplicitly.get())
-        val explicitMain = mainClass.orNull
-        return loaded.copy(build = loaded.build.copy(mainClass = explicitMain ?: loaded.build.mainClass))
+        return loaded.copy(build = loaded.build.copy(mainClass = resolveMainClass(loaded, mainClass.orNull)))
     }
 
     /** 打包输入，`krema { }` 块的覆盖值已压过 toml。 */
@@ -86,7 +86,7 @@ abstract class KremaConfigTask : DefaultTask() {
             outputDir = outputDir,
             identifier = config.bundle.identifier ?: config.identifier,
             version = config.version,
-            mainClass = config.build.mainClass ?: "${config.identifier}.Main",
+            mainClass = resolveMainClass(config, null),
             icon = config.bundle.icon?.let(dir::resolve),
             deepLinkSchemes = config.deepLinkSchemes,
         )

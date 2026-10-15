@@ -1,7 +1,7 @@
 #!/bin/bash
 # 每次新开环境都执行
 
-npm install -g pnpm
+npm install -g pnpm@12
 
 cd /workspace/krema-demo/
 pnpm approve-builds --all

@@ -9,6 +9,8 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import top.birthcat.kremaf.ext.gradle.config.BundleSettings
 import top.birthcat.kremaf.ext.gradle.config.appJarName
@@ -27,6 +29,7 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 abstract class KremaBuildTask : KremaProjectTask() {
     /** 专用 app jar（由 kremaAppJar 产出）：classes + resources 收全，manifest 带 Main-Class。 */
     @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val appJar: RegularFileProperty
 
     /** 运行期依赖 jar（已剔除工程自身 jar），原样进 lib/。 */
@@ -35,6 +38,7 @@ abstract class KremaBuildTask : KremaProjectTask() {
 
     /** 前端 dist 打的 assets jar（由 kremaAssetsJar 产出），内容落在 `assets/` 下、Krema 从 classpath 读。 */
     @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
     abstract val assetsJar: RegularFileProperty
 
     @TaskAction

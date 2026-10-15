@@ -1,2 +1,6 @@
+# packages 列 "."（front/ 自身）：空数组时本工程不算 workspace 成员，
+# allowBuilds 被忽略，esbuild postinstall 被拦，vite build 缺 @esbuild 二进制而失败。
+packages:
+  - "."
 allowBuilds:
   esbuild: true

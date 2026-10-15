@@ -15,12 +15,14 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
 import top.birthcat.kremaf.ext.gradle.config.ASSETS_DIR
 import top.birthcat.kremaf.ext.gradle.config.BUNDLE_DIR_NAME
+import top.birthcat.kremaf.ext.gradle.config.BundleSettings
 import top.birthcat.kremaf.ext.gradle.config.KremaConfig
 import top.birthcat.kremaf.ext.gradle.config.KremaConfigLoader
 import top.birthcat.kremaf.ext.gradle.config.KremaExtension
 import top.birthcat.kremaf.ext.gradle.config.appJarName
 import top.birthcat.kremaf.ext.gradle.config.assetsJarName
 import top.birthcat.kremaf.ext.gradle.config.platformOutputDirName
+import top.birthcat.kremaf.ext.gradle.config.resolveMainClass
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.domain.PlatformDetector
 import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
@@ -55,12 +57,10 @@ internal fun Project.registerKremaTasks() {
 
     tasks.register(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
-        // 前端产物落在 toml 的 out_dir（前端工具链自己的落点）；
-        // 插件只能按它读，读 build/krema 会让 prod 的 app jar 空 assets。
+        // out_dir 是前端工具链自己的落点，插件只能按它读：读错地方 prod 的 app jar 就空 assets。
         task.description = "Run the frontend production build (npm); output dir from krema.toml out_dir, declared as cacheable"
         task.configureProject(ext)
-        // 前端命令：toml 的 frontend_* 是底，
-        // `krema.frontend { }` 里显式写的压过它。
+        // 前端命令两层：toml 是底，krema.frontend { } 显式写的压过。
         val tomlFrontend = providers.provider { kremaConfig(ext).frontend }
         task.buildCommand.convention(tomlFrontend.map { it.buildCommand })
         ext.frontend.buildCommand.orNull
@@ -77,43 +77,40 @@ internal fun Project.registerKremaTasks() {
         )
     }
 
-    // 后端编译产物 + 运行期依赖 classpath：
-    // kremaBuild 与运行时镜像 / 依赖分析共用同一份。
+    // classes + 运行期 classpath：kremaBuild、运行时镜像与依赖分析共用。
     val classpath = kremaApplicationClasspath()
+
+    // 两个 jar 必须顶层注册：register 闭包懒执行，跑到时 task set 已冻结，register 直接报错。
+    val settings = providers.provider { kremaBuildSettings(ext) }
+    // classes 显式依赖：jar 的 from 是输出目录位置，不声明看不到产出它的 processResources。
+    val classesTask = tasks.named("classes")
+    val appJarTask =
+        tasks.register(KremaTaskNames.APP_JAR, Jar::class.java) { jar ->
+            jar.dependsOn(classesTask)
+            jar.from(classpath.classesDirs)
+            classpath.resourcesDir?.let { jar.from(it) }
+            jar.manifest { it.attributes(mapOf("Main-Class" to settings.map { it.mainClass }.get())) }
+            jar.archiveFileName.set(settings.map { appJarName(it) })
+        }
+
+    val assetsJarTask =
+        tasks.register(KremaTaskNames.ASSETS_JAR, Jar::class.java) { jar ->
+            jar.from(
+                tasks
+                    .named(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java)
+                    .map { it.distDir },
+            ) { it.into(ASSETS_DIR) }
+            jar.archiveFileName.set(settings.map { assetsJarName(it) })
+        }
 
     tasks.register(KremaTaskNames.BUILD, KremaBuildTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
         task.description = "Assemble backend and frontend: build the app jar and a separate assets jar into lib/"
         task.configureProject(ext)
-        // 编译交回 Gradle：kremaBuild 跑在
-        // compileJava / processResources 之后。
-        task.dependsOn(tasks.named("classes"))
-        // app jar 不复用工程 jar，避免 lib/ 里出现两份工程类。
-        val settings = task.bundleSettings()
-        val mainClass = settings.mainClass
-        val archiveName = appJarName(settings)
-        val appJarTask =
-            tasks.register(KremaTaskNames.APP_JAR, Jar::class.java) { jar ->
-                jar.from(classpath.classesDirs)
-                classpath.resourcesDir?.let { jar.from(it) }
-                jar.manifest { it.attributes(mapOf("Main-Class" to mainClass)) }
-                jar.archiveFileName.set(archiveName)
-            }
         task.appJar.set(appJarTask.flatMap { it.archiveFile })
-        // 依赖 jar：runtimeClasspath 剔除工程自身 jar，
-        // 避免 lib/ 里出现两份工程类。
-        task.dependencyJars.from(classpath.runtimeClasspath.minus(appJarTask.flatMap { it.archiveFile }))
-        // 前端 dist 打进独立 assets jar（内容落在 assets/ 下），与后端一起由 kremaBuild 聚到 lib/。
-        val assetsJarTask =
-            tasks.register(KremaTaskNames.ASSETS_JAR, Jar::class.java) { jar ->
-                jar.from(
-                    tasks
-                        .named(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java)
-                        .map { it.distDir },
-                ) { it.into(ASSETS_DIR) }
-                jar.archiveFileName.set(assetsJarName(settings))
-            }
         task.assetsJar.set(assetsJarTask.flatMap { it.archiveFile })
+        // 仅收集依赖 jar
+        task.dependencyJars.from(classpath.runtimeClasspath)
     }
 
     tasks.register(KremaTaskNames.RUNTIME_IMAGE, KremaRuntimeImageTask::class.java) { task ->
@@ -128,18 +125,15 @@ internal fun Project.registerKremaTasks() {
         task.multiRelease.set(targetBytecodeVersion())
         task.classpathFiles.from(classpath.classesDirs)
         task.classpathFiles.from(classpath.runtimeClasspath)
-        // 用 convention 而不是 set：扩展侧没写 modules 时，
-        // set(provider) 等于显式给一个无值 provider，
-        // 非 @Optional 的 @Input 会在校验期就报「没有值」，
-        // convention 兜不住这种情况。
+        // convention 而非 set：扩展没写 modules 时 set(provider) 是无值 provider，
+        // 非 @Optional 的 @Input 校验期就报「没有值」，convention 才兜得住。
         task.modules.convention(ext.runtime.modules.orElse(emptySet()))
     }
 
     tasks.register(KremaTaskNames.JDEPS_MODULES, KremaJdepsModulesTask::class.java) { task ->
         task.group = KremaTaskNames.GROUP
         task.description = "Print the runtime module list derived from jdeps, without trimming an image"
-        // 不 dependsOn("classes") 的话 classesDirs 还不存在，
-        // 模块推导会悄悄漏掉应用自己的代码。
+        // 不依赖 classes 的话 classesDirs 不存在，推导会漏掉应用自己的代码。
         task.dependsOn(tasks.named("classes"))
         task.jdkBinDir.set(jdkBinDir())
         task.multiRelease.set(targetBytecodeVersion())
@@ -182,12 +176,9 @@ internal fun Project.registerKremaTasks() {
         task.linuxIcon.set(ext.bundling.linuxIcon)
     }
 
-    // 按需注册平台包格式 task：只注册宿主平台配置了的那些，没配就一种都不出。
-    //
-    // 必须推迟到 afterEvaluate：`krema { bundling { } }` 块
-    // 在插件 apply 之后才执行，
-    // 在 apply 里直接读 `formatsForHost()` 只会拿到空集合，
-    // 于是平台包 task 一种都注册不出来。
+    // 按需注册平台包：只注册宿主平台配了的格式，没配就一种都不出。
+    // 必须推迟到 afterEvaluate：krema { bundling { } } 在 apply 之后才执行，
+    // apply 里读 formatsForHost() 只会拿到空集合。
     afterEvaluate {
         val hostFormats = ext.bundling.formatsForHost()
         val platformTaskNames =
@@ -203,19 +194,11 @@ internal fun Project.registerKremaTasks() {
                     task.outputDir.convention(
                         ext.outputDir.orElse(layout.buildDirectory.dir("krema")).map { it.dir(platformOutputDirName(format.id)) },
                     )
-                    // app-image 目录 = kremaBundle 的 outputDir 下
-                    // 按宿主平台命名的子目录。
-                    //
-                    // 两段都不能在闭包里捕获不可序列化的对象：
-                    //  - 子目录名只在配置期由 appName + 平台算一次，
-                    //    存成 String，不在 provider 闭包里调
-                    //    `kremaConfig(ext)`（那是 Project 扩展，闭包捕获
-                    //    Project 会让配置缓存序列化任务图时
-                    //    带上 DefaultProject，直接丢弃缓存）。
-                    //  - appImageDir 以 `tasks.named(BUNDLE)` 这个
-                    //    「按路径引用」的 task provider 为源，而不是直接
-                    //    捕获 bundleTask 这个 Task 对象：后者在闭包里
-                    //    捕获 KremaBundleTask，同样不可序列化。
+                    // app-image 目录 = kremaBundle 产物下按平台命名的子目录。
+                    // 子目录名配置期算成 String：闭包里调 kremaConfig(ext) 会捕获
+                    // Project，配置缓存序列化时直接丢缓存。
+                    // appImageDir 以 tasks.named(BUNDLE) 的 provider 为源，
+                    // 不捕获 Task 对象（同样不可序列化）。
                     val appImageDirName =
                         Platform.of(System.getProperty("os.name")).appImageDirName(kremaConfig(ext).packageName)
                     task.appImageDir.convention(
@@ -246,19 +229,14 @@ internal fun Project.registerKremaTasks() {
         task.configureProjectDevRun(ext)
         // 干净仓库也要先编译：否则 classesDirs 还空着，起的进程照样找不到主类。
         task.dependsOn(tasks.named("classes"))
-        // classpath 取「编译产物 + 运行期依赖」：source set 的
-        // 运行时 classpath 才含项目自己的类，
-        // 光 runtimeClasspath 只会拿到依赖 jar、
-        // 主类找不到（ClassNotFoundException）。
+        // 取编译产物 + 运行期依赖：光 runtimeClasspath 不含项目自己的类，
+        // 起的进程会 ClassNotFound 找不到主类。
         task.classpath = classpath.classesDirs + classpath.runtimeClasspath
-        // 主类在配置期就定死（不随执行变）：直接算成 String
-        // 设进 convention，不在 provider 闭包里调
-        // `task.resolvedMainClass()` —— 那会捕获 task 对象，
-        // 配置缓存序列化任务图时同样不可序列化。
+        // 主类配置期算成 String 设进 convention：provider 闭包里调
+        // task.resolvedMainClass() 会捕获 task 对象，配置缓存不可序列化。
         task.mainClass.convention(task.resolvedMainClass())
         task.doFirst { task.environment("KREMA_DEV_URL", task.resolvedDevUrl()) }
-        // 不依赖 kremaBuild / kremaFrontendBuild：
-        // 前端由使用方自己的 dev server 提供。
+        // 不依赖 kremaBuild/FrontendBuild：前端由使用方自己的 dev server 提供。
     }
 
     registerRun(
@@ -283,6 +261,12 @@ internal fun Project.registerKremaTasks() {
     }
 }
 
+// Jar task 取不到 bundleSettings()，按同口径推 jar 名与主类。
+private fun Project.kremaBuildSettings(ext: KremaExtension): BundleSettings {
+    val config = kremaConfig(ext)
+    return BundleSettings(appName = config.packageName, mainClass = resolveMainClass(config, ext.mainClass.orNull))
+}
+
 /** 注册期就要用 krema.toml，故配置期直读；显式路径优先，否则取根下约定。 */
 private fun Project.kremaConfig(ext: KremaExtension): KremaConfig {
     val toml =
@@ -299,10 +283,8 @@ private fun Project.conventionFrontendDir(
     ext: KremaExtension,
     target: org.gradle.api.file.DirectoryProperty,
 ) {
-    // 键缺失时兜成 "."（即项目根自身），而不是在 provider 里判 null：
-    // provider 的泛型不带空性标注，
-    // map 里判 null 会被当成恒假，而键缺失时它运行时确实是 null。
-    // 兜在 provider 之外，空性就看得见。
+    // 键缺失时兜成 "."（项目根本机），不在 provider 里判 null：
+    // provider 泛型不带空性标注，map 里判 null 会被当恒假。
     val tomlDir = providers.provider { kremaConfig(ext).frontend.dir ?: "." }
     target.convention(tomlDir.map { layout.projectDirectory.dir(it) })
     ext.frontend.dir.orNull
@@ -322,8 +304,7 @@ private fun Project.registerRun(
         task.configureProject(ext)
         // 先打包再起进程，找不到 bundle 时直接报错而不是凭空 launch。
         task.dependsOn(tasks.named(bundleTask))
-        // run 认的是刚打出的 app-image 本体（kremaBundle 产出），
-        // 目录直接取自那个打包 task，保证起的就是刚打出来的那份。
+        // bundleDir 取自 kremaBundle 刚打出的产物，保证起的就是那一份。
         task.bundleDir.convention(bundleDir)
         task.target.convention(hostTarget())
         task.cleanupService.set(cleanup)
@@ -356,19 +337,16 @@ private fun Project.jdkBinDir(): Provider<String> {
         }
 }
 
-/** 编译所用 JDK 的版本：读 toolchain，没配就是空 ——
- *  这时 `launcherFor` 自己会取当前 JVM。 */
+/** 编译 JDK 版本：读 toolchain，没配就是空（launcherFor 自取当前 JVM）。 */
 private fun Project.toolchainLanguageVersion(): Provider<JavaLanguageVersion> =
     extensions.getByType(JavaPluginExtension::class.java).toolchain.languageVersion
 
-/** 目标字节码主版本号，给 jdeps --multi-release；
- *  取 targetCompatibility 对齐其字节码。 */
+/** 目标字节码主版本（jdeps --multi-release 用）：取 targetCompatibility。 */
 @Throws(GradleException::class)
 private fun Project.targetBytecodeVersion(): Provider<String> =
     providers.provider {
         val target = extensions.getByType(JavaPluginExtension::class.java).targetCompatibility
-        // jdeps 只接受 9 及以上（更低的版本号它直接报
-        // 「选项的参数无效」），而模块化本身也是 9 起的概念。
+        // jdeps 只接 9+（更低报「选项的参数无效」），模块化本身也是 9 起。
         if (target < JavaVersion.VERSION_1_9) {
             throw GradleException("目标字节码 $target 低于 9，推导不出 JDK 模块；请把 targetCompatibility 提到 9 及以上")
         }

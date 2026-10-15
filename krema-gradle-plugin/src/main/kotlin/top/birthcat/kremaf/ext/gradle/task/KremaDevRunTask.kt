@@ -9,6 +9,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.config.KremaConfig
+import top.birthcat.kremaf.ext.gradle.config.resolveMainClass
 
 /**
  * 开发期：在 classpath 上起后端应用进程，把前端 dev server 地址作为环境变量 `KREMA_DEV_URL` 注入。
@@ -51,7 +52,7 @@ abstract class KremaDevRunTask : org.gradle.api.tasks.JavaExec() {
     @Throws(IllegalStateException::class)
     internal fun resolvedMainClass(): String {
         val config = kremaConfig()
-        return mainClassOverride.orNull ?: config.build.mainClass ?: "${config.identifier}.Main"
+        return resolveMainClass(config, mainClassOverride.orNull)
     }
 
     /** 解析 `KREMA_DEV_URL`：`krema { devUrl }` 覆盖 `[build].dev_url`，都没有时回落到内建默认。 */

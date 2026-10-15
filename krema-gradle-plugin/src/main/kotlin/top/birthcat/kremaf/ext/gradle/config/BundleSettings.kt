@@ -74,6 +74,12 @@ fun resolveBundleIcon(
     return null
 }
 
+/** 主类解析：覆盖值（非空）> krema.toml > <identifier>.Main。 */
+internal fun resolveMainClass(
+    config: KremaConfig,
+    override: String?,
+): String = override?.takeIf { it.isNotBlank() } ?: config.build.mainClass ?: "${config.identifier}.Main"
+
 /** 对应 jpackage 的 `--main-jar`。 */
 fun appJarName(settings: BundleSettings): String = "${settings.appName}.jar"
 
