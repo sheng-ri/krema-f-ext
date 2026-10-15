@@ -25,7 +25,6 @@ import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
 import top.birthcat.kremaf.ext.gradle.tool.AppImageTool
 import top.birthcat.kremaf.ext.gradle.tool.JpackageTool
-import top.birthcat.kremaf.ext.gradle.tool.capture
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.inject.Inject
@@ -77,11 +76,13 @@ abstract class KremaPlatformTask : KremaProjectTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val macIcon: RegularFileProperty
 
+    /** Windows 图标（ico）。缺失即跳过 `--icon`。 */
     @get:InputFile
     @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val winIcon: RegularFileProperty
 
+    /** Linux 图标（png）。缺失即跳过 `--icon`。 */
     @get:InputFile
     @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
@@ -138,7 +139,6 @@ abstract class KremaPlatformTask : KremaProjectTask() {
         }
     }
 
-    /** jpackage 安装器：复用 app-image，不再重打。 */
     @Throws(GradleException::class)
     private fun jpackageInstaller(
         format: BundleFormat,
@@ -165,130 +165,13 @@ abstract class KremaPlatformTask : KremaProjectTask() {
         )
     }
 
-    /** AppImage：把 app-image 目录交给 `appimagetool` 封装。 */
     @Throws(GradleException::class)
     private fun appImageTool(settings: BundleSettings) {
-        val rawTool =
-            AppImageTool.findInPath()
-                ?: if (appImageToolAutoDownload.get()) {
-                    AppImageTool.download(outputDir.get().asFile.toPath())
-                } else {
-                    throw GradleException(
-                        "PATH 上找不到 appimagetool，且 krema.bundling.appImageToolAutoDownload 为 false。" +
-                            "手动安装 appimagetool 并放进 PATH，或把该开关打开。",
-                    )
-                }
-        // appimagetool 要 app dir 里有 `<appName>.desktop`（jpackage 的 app-image 不带）。但那是本 task 的输入
-        // （kremaBundle 的产物），不能由本 task 改写，否则二次运行输入哈希变了、UP-TO-DATE 失效。复制到 staging 再写元信息。
-        val staging =
-            outputDir
-                .get()
-                .asFile
-                .toPath()
-                .resolve("appimage-staging")
-        staging.toFile().deleteRecursively()
-        Files.createDirectories(staging)
-        Files.walk(appImageDir.get().asFile.toPath()).use { stream ->
-            for (from in stream) {
-                if (from == appImageDir.get().asFile.toPath()) continue
-                val to =
-                    staging.resolve(
-                        appImageDir
-                            .get()
-                            .asFile
-                            .toPath()
-                            .relativize(from),
-                    )
-                if (Files.isDirectory(from)) {
-                    Files.createDirectories(to)
-                } else {
-                    Files.copy(
-                        from,
-                        to,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                        java.nio.file.StandardCopyOption.COPY_ATTRIBUTES,
-                    )
-                }
-            }
-        }
-        prepareAppImageMeta(settings, staging)
-        // 下载到的是 appimagetool 自带的 AppImage，直接跑要 FUSE；多数容器 / CI 没有 FUSE。
-        // 用 `--appimage-extract` 抽出内部真二进制（这一步不挂载、不需要 FUSE），后续打包走它。
-        val tool = resolveAppImageTool(rawTool)
-        val out =
-            outputDir
-                .get()
-                .asFile
-                .toPath()
-                .resolve("${settings.appName}.AppImage")
-        runCommand(
-            listOf(tool.toAbsolutePath().toString(), staging.toString(), out.toAbsolutePath().toString()),
-            "appimagetool 封装 AppImage 失败",
+        AppImageTool(execOperations).packageAppImage(
+            appImageDir = appImageDir.get().asFile.toPath(),
+            outputDir = outputDir.get().asFile.toPath(),
+            settings = settings,
+            autoDownload = appImageToolAutoDownload.get(),
         )
-        // 舞台是输出区里的临时副本，打包完即删，别把整份 app-image 留在产物里。
-        staging.toFile().deleteRecursively()
-    }
-
-    /** 为 staging 里的 app-image 补上 AppImage 打包要的 `.desktop` 与根级图标（jpackage 的 app-image 都不带）。 */
-    private fun prepareAppImageMeta(
-        settings: BundleSettings,
-        appDir: Path,
-    ) {
-        val desktop = appDir.resolve("${settings.appName}.desktop")
-        Files.writeString(
-            desktop,
-            """
-            [Desktop Entry]
-            Type=Application
-            Name=${settings.appName}
-            Exec=bin/${settings.appName}
-            Icon=${settings.appName}
-            Terminal=false
-            Categories=Utility;
-            """.trimIndent(),
-        )
-        val iconPng = appDir.resolve("${settings.appName}.png")
-        val from = settings.icon ?: appDir.resolve("lib/${settings.appName}.png")
-        if (Files.exists(from)) Files.copy(from, iconPng, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
-    }
-
-    /**
-     * 解析出真正能用的 `appimagetool` 可执行文件。
-     *
-     * 下载到的工具本身是 AppImage，运行需要 FUSE；而 `--appimage-extract` 只解包内嵌的 squashfs、不挂载，
-     * 因此无 FUSE 也能跑，抽出的是普通 ELF 二进制，用它打包不再依赖 FUSE。已经是真二进制（PATH 里装的那种）
-     * 不认 `--appimage-extract`，抽出失败就回退到原工具。
-     */
-    @Throws(GradleException::class)
-    private fun resolveAppImageTool(rawTool: Path): Path {
-        val extractDir =
-            outputDir
-                .get()
-                .asFile
-                .toPath()
-                .resolveSibling(".appimagetool-extract")
-        val inner = extractDir.resolve("squashfs-root/usr/bin/appimagetool")
-        if (Files.isRegularFile(inner)) return inner
-        Files.createDirectories(extractDir)
-        // --appimage-extract 在工作目录内把 AppImage 解包成普通 ELF 二进制，不挂载、不需 FUSE。
-        val result =
-            execOperations.capture(
-                listOf(rawTool.toAbsolutePath().toString(), "--appimage-extract"),
-                workingDir = extractDir,
-            )
-        if (result.exitValue != 0) return rawTool
-        if (!Files.isRegularFile(inner)) {
-            throw GradleException("抽出 appimagetool 失败：\n${result.output}")
-        }
-        return inner
-    }
-
-    @Throws(GradleException::class)
-    private fun runCommand(
-        command: List<String>,
-        failure: String,
-    ) {
-        val result = execOperations.capture(command)
-        if (result.exitValue != 0) throw GradleException("$failure：\n${result.output}")
     }
 }
