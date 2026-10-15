@@ -14,13 +14,11 @@ import java.util.Locale
  * 探测口径按 JVM 的 `os.name` / `os.arch`，覆盖 Krema 支持的三个平台族。
  */
 object PlatformDetector {
-    /** 探测当前平台。 */
     fun detect(): Platform = Platform.of(System.getProperty("os.name"))
 
     /** 探测当前架构标识，如 `aarch64`、`x86_64`。 */
     fun getArch(): String = normalizeArch(System.getProperty("os.arch"))
 
-    /** 归一化架构别名。 */
     fun normalizeArch(arch: String): String =
         when (arch.lowercase(Locale.ROOT)) {
             "aarch64" -> "aarch64"
@@ -56,7 +54,6 @@ enum class Platform {
         get() = if (this == WINDOWS) "" else "lib"
 
     companion object {
-        /** 由 `os.name` 判定平台族。 */
         fun of(osName: String): Platform {
             val name = osName.lowercase(Locale.ROOT)
             return when {

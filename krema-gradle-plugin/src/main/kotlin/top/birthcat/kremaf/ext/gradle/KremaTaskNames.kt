@@ -32,8 +32,8 @@ object KremaTaskNames {
     /**
      * jdeps 检视 task：打印推导出的模块清单 / `-v` 逐包明细。
      *
-     * 这两张挂在 krema 分组却用 `jdeps` 前缀（其余 task 一律 `krema` 前缀）：它们对应的正是 jdeps
-     * 的两个互斥开关——`-verbose` 与 `--print-module-deps` 不能同时给，同一张 task 切不出这个差别。
+     * 这两种挂在 krema 分组却用 `jdeps` 前缀（其余 task 一律 `krema` 前缀）：它们对应的正是 jdeps
+     * 的两个互斥开关——`-verbose` 与 `--print-module-deps` 不能同时给，同一种 task 切不出这个差别。
      */
     const val JDEPS_MODULES = "jdepsModules"
 

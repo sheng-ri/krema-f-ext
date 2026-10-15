@@ -15,17 +15,16 @@ import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
 import java.nio.file.Files
 import java.nio.file.Path
 
-/**
- * jpackage 适配：把应用打成未压缩 app-image，或把现成 app-image 包成平台安装器。
- *
- * 两条路径都是「拼命令 + 执行 + 捕获 + 非零退出即失败」同形流程，差异只在参数，故放一起。
- * 工具取自 JDK toolchain 的 bin 目录而非 PATH：用户用别的 JDK 构建时 PATH 上的 jpackage 可能不存在。
- * [appImage] 的宿主平台由调用方传入：平台包 task 与 bundle task 本就对宿主平台做不同处理，这里不该自作主张再解析一次。
- */
+/** jpackage 适配：拼命令执行两类流程（产 app-image / 包平台安装器），工具取自 JDK toolchain 而非 PATH，宿主平台由调用方传入。 */
 class JpackageTool(
     private val execOperations: ExecOperations,
 ) {
-    /** 产出未压缩、可直接运行的 app-image（bundle 的底座）。 */
+    /**
+     * 产出未压缩、可直接运行的 app-image（bundle 的底座）。
+     * 重建前会清空已存在的 app-image 目录：jpackage 遇同名目录报「目录已存在」，
+     * 而它生成的启动器带 ReadOnly 属性，deleteRecursively 删不掉只读文件，
+     * 目录因删不空而残留，下次构建会卡死在「目录已存在」。
+     */
     @Throws(GradleException::class)
     fun appImage(
         binDir: Path,
@@ -35,9 +34,6 @@ class JpackageTool(
         runtimeImageDir: Path,
         dest: Path,
     ) {
-        // jpackage 见到已存在的 app-image 目录就报「目录已存在」；该目录是本 task 声明的产物，重建前清空安全。
-        // 先去只读再删：jpackage 生成的启动器带 ReadOnly 属性，而 deleteRecursively 删不掉只读文件 ——
-        // 表现是 app/ 与 runtime/ 都清干净了、只剩启动器，目录因删不空而留着，下一次构建就此卡死在「目录已存在」。
         Files.createDirectories(dest)
         dest
             .resolve(platform.appImageDirName(settings.appName))
@@ -67,7 +63,7 @@ class JpackageTool(
                         dest.toString(),
                     ),
                 )
-                // 每个 --java-options 各占一个参数：值里带空格时不会被拆开，jpackage 才认得整条选项。
+                // --java-options 须各占一参：值含空格才不会被拆散。
                 addAll(javaOptions(platform).flatMap { listOf("--java-options", it) })
                 settings.icon?.let { addAll(listOf("--icon", it.toString())) }
             }
@@ -109,13 +105,14 @@ class JpackageTool(
 
     private fun jpackage(binDir: Path): String = binDir.resolve("jpackage" + executableSuffix()).toString()
 
-    // macOS 的应用进程必须跑在主线程上，缺这条选项启动器起不来。
+    // macOS 应用进程须跑主线程，缺此项启动器起不来。
     private fun javaOptions(platform: Platform): List<String> =
         buildList {
             add("--enable-native-access=ALL-UNNAMED")
             if (platform == Platform.DARWIN) add("-XstartOnFirstThread")
         }
 
+    @Throws(GradleException::class)
     private fun run(
         command: List<String>,
         failure: String,

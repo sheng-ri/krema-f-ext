@@ -8,12 +8,7 @@ import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 import java.util.concurrent.CopyOnWriteArrayList
 
-/**
- * 跟踪 run task 拉起的长驻进程，构建结束时（含用户中断）一并回收，避免留下孤儿进程。
- *
- * `BuildService` 在构建收尾时关闭，Ctrl-C 取消也会触发，故把进程登记在这里、在 [close] 里杀掉整棵进程树。
- * 但构建被中断时 daemon 取消不一定走到 [close]，所以 run task 在被中断时也会直接调用 [killAll] 兜底。
- */
+/** 登记 run task 拉起的长驻进程，构建收尾（或中断）时杀掉整棵进程树，避免孤儿进程。 */
 abstract class KremaProcessCleanupService :
     BuildService<BuildServiceParameters.None>,
     AutoCloseable {
@@ -23,7 +18,7 @@ abstract class KremaProcessCleanupService :
         processes.add(process)
     }
 
-    /** 杀掉所有登记进程的整棵进程树。幂等，可重复调用。 */
+    /** 幂等，可重复调用。 */
     fun killAll() {
         for (process in processes) {
             killTree(process)

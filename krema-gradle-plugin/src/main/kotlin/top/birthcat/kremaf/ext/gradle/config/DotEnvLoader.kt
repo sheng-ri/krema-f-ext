@@ -14,9 +14,7 @@ import java.nio.file.Path
  * 跳过空行与 `#` 注释，只在第一个 `=` 处切分，剥掉成对的引号。不可读的文件静默跳过。
  */
 class DotEnvLoader {
-    /**
-     * 解析 [projectDir] 下的 `.env` 为键值对；文件缺失或不可读时返回空表。
-     */
+    /** 文件缺失或不可读时返回空表。 */
     fun load(projectDir: Path): Map<String, String> {
         val vars = LinkedHashMap<String, String>()
         val envPath = projectDir.resolve(".env")

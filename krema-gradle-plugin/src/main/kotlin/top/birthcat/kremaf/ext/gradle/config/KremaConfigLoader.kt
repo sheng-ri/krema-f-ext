@@ -15,9 +15,7 @@ import java.nio.file.Path
  * 解析失败或文件缺失时退回默认值，与上游 `loadOrDefault` 行为一致。
  */
 class KremaConfigLoader {
-    /**
-     * 读 `krema.toml`，解析失败时退回默认值；文件缺失或解析异常都返回默认 [KremaConfig]。
-     */
+    /** 文件缺失或解析异常都返回默认 [KremaConfig]。 */
     fun loadOrDefault(path: Path): KremaConfig {
         if (!Files.isRegularFile(path)) return KremaConfig()
         val toml = runCatching { Toml().read(path.toFile()) }.getOrNull() ?: return KremaConfig()

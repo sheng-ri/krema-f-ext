@@ -25,6 +25,7 @@ abstract class KremaDevRunTask : org.gradle.api.tasks.JavaExec() {
     @get:Internal
     abstract val configFilePath: org.gradle.api.provider.Property<String>
 
+    /** 用户是否在 `krema { }` 里显式给了 `configFile`：显式指定却缺失时 [loadKremaConfig] 硬失败指到路径，未指定时缺失即回落约定位置。 */
     @get:Input
     abstract val configFileSetExplicitly: org.gradle.api.provider.Property<Boolean>
 
@@ -43,7 +44,6 @@ abstract class KremaDevRunTask : org.gradle.api.tasks.JavaExec() {
         description = "Run the backend app on the classpath, injecting KREMA_DEV_URL; long-lived, not part of CI gating"
     }
 
-    /** 解析 krema.toml，缺失但显式指定时抛错指到路径。 */
     @Throws(IllegalStateException::class)
     private fun kremaConfig(): KremaConfig = loadKremaConfig(configFilePath.get(), configFileSetExplicitly.get())
 

@@ -72,11 +72,13 @@ abstract class KremaBundleTask : KremaProjectTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val macIcon: RegularFileProperty
 
+    /** Windows 图标（ico）。缺失即跳过 `--icon`。 */
     @get:InputFile
     @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val winIcon: RegularFileProperty
 
+    /** Linux 图标（png）。缺失即跳过 `--icon`。 */
     @get:InputFile
     @get:Optional
     @get:PathSensitive(PathSensitivity.NONE)

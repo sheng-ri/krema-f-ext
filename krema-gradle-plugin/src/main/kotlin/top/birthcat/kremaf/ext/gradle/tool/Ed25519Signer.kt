@@ -10,12 +10,7 @@ import java.security.KeyPairGenerator
 import java.security.Signature
 import java.util.Base64
 
-/**
- * 签名密钥对的生成与签名。
- *
- * 用 Ed25519：JDK 15 起内置，无需 BouncyCastle，密钥长度恒定，适合整段塞进 `krema.toml` 的 `updater` 段。
- * 私钥、公钥都以 PKCS#8 / X.509 的 Base64 文本落盘，`----` 包装与上游的 PEM 观感一致。
- */
+/** Ed25519 密钥对生成与签名：JDK 内置无需 BouncyCastle，密钥恒定、适合塞进 `krema.toml` 的 `updater` 段。 */
 class Ed25519Signer {
     fun generate(
         privateKey: Path,

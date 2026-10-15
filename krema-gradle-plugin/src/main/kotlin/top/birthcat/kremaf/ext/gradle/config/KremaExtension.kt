@@ -121,7 +121,7 @@ abstract class KremaBundlingExtension {
     /**
      * 各平台的图标：`macIcon` 吃 icns、`winIcon` 吃 ico、`linuxIcon` 吃 png。
      *
-     * 未配或文件不存在就跳过 `--icon`，不报错。三张都未配时退到 `krema.toml` 的 `[bundle].icon`
+     * 未配或文件不存在就跳过 `--icon`，不报错。三种都未配时退到 `krema.toml` 的 `[bundle].icon`
      * 按宿主平台后缀兜底（见 [resolveBundleIcon]）。
      */
     abstract val macIcon: RegularFileProperty
@@ -151,8 +151,7 @@ abstract class KremaBundlingExtension {
 }
 
 /**
- * 按宿主平台从三张属性里选要出的格式。纯函数便于单测：把「跨平台写的格式列表只留宿主子集」这一层
- * 与 Gradle 的 `SetProperty` 解耦。
+ * 按宿主平台从三种属性里选要出的格式：把「跨平台写的格式列表只留宿主子集」这一层与 Gradle 的 `SetProperty` 解耦。
  */
 fun selectHostFormats(
     platform: Platform,

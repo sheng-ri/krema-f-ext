@@ -52,7 +52,6 @@ abstract class KremaJdepsModulesTask : DefaultTask() {
         if (out.exitValue != 0 || modules.isEmpty()) {
             throw GradleException("推导运行时模块失败：\n${out.text}")
         }
-        // 走 Gradle 日志（lifecycle）而非 println：输出进 Gradle 日志体系，受 --quiet/--info 级别控制。
         logger.lifecycle("运行时模块：$modules")
     }
 }

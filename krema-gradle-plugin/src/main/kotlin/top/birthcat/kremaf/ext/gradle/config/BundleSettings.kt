@@ -74,10 +74,10 @@ fun resolveBundleIcon(
     return null
 }
 
-/** app jar 名，对应 jpackage 的 `--main-jar`。 */
+/** 对应 jpackage 的 `--main-jar`。 */
 fun appJarName(settings: BundleSettings): String = "${settings.appName}.jar"
 
-/** 独立前端资源 jar 名，与 app jar 同落 `lib/`。 */
+/** 与 app jar 同落 `lib/`。 */
 fun assetsJarName(settings: BundleSettings): String = "${settings.appName}-assets.jar"
 
 /** app-image 启动器封装：只换算「产物目录 + 平台 → 可执行文件/进程」，启动器由 jpackage 摆放。 */

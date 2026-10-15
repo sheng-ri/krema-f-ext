@@ -22,7 +22,7 @@ import javax.inject.Inject
 /**
  * 跑 `jdeps -v` 打出逐包的依赖明细，供用户自己分析该往 `krema { runtime { modules } }` 里补什么。
  *
- * 与 `jdepsModules` 分成两张task 而不是同一张切开关：jdeps 明说 `-verbose` 与 `--print-module-deps`
+ * 与 `jdepsModules` 分成两种task 而不是同一种切开关：jdeps 明说 `-verbose` 与 `--print-module-deps`
  * 互斥，同时给会直接报错退出。
  *
  * 报告文件声明成 [Internal] 而非 `@OutputFile`：它落在 `build/krema/` 下，声明成输出就是第二个
@@ -60,7 +60,7 @@ abstract class KremaJdepsModulesVerboseTask : DefaultTask() {
         Files.write(target, out.bytes)
         if (out.exitValue != 0) {
             // 不当失败：-v 在部分 jar 组合下会一边非零退出一边照常吐出可用的报告，
-            // 而这份报告正是用户跑这张 task 想看的东西。
+            // 而这份报告正是用户跑这种 task 想看的东西。
             logger.warn("jdeps -v 退出码 ${out.exitValue}，明细已写入 ${target.toAbsolutePath()}")
         }
         logger.lifecycle(out.text)

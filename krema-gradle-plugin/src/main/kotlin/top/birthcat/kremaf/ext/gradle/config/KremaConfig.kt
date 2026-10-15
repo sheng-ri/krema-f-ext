@@ -27,7 +27,7 @@ data class Build(
     val devUrl: String? = null,
 )
 
-/** 打包约定：图标与标识。 */
+/** 打包层元数据约定：图标、标识、版权，只在本仓库的打包步骤被读取，故单列不进构建骨架。 */
 data class Bundle(
     val icon: String? = null,
     val identifier: String? = null,

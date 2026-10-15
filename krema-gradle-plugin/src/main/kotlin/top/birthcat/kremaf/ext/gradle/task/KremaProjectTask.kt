@@ -22,7 +22,7 @@ abstract class KremaProjectTask : KremaConfigTask() {
     abstract val outputDir: DirectoryProperty
 
     /** 打包输入，`krema { }` 块的覆盖值已压过 toml。 */
-    protected fun bundleSettings(): BundleSettings = bundleSettings(outputDir.get().asFile.toPath())
+    internal fun bundleSettings(): BundleSettings = bundleSettings(outputDir.get().asFile.toPath())
 }
 
 /** 配置输入 + 产物目录约定（默认 `build/krema`）。 */

@@ -14,8 +14,6 @@ class JlinkTool(
     private val execOperations: ExecOperations,
 ) {
     /**
-     * 裁出运行时镜像到 [outputDir]。
-     *
      * 目标目录先清空再裁：jlink 见到已存在的目录就报「目录已存在」，而该目录是本 task 声明的产物，重建前清空安全。
      */
     @Throws(GradleException::class)

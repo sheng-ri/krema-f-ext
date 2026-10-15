@@ -19,8 +19,8 @@ class KremaPlugin : Plugin<Project> {
         extension.frontend = project.extensions.create("frontend", KremaFrontendExtension::class.java)
         extension.bundling = project.extensions.create("bundling", KremaBundlingExtension::class.java)
         extension.runtime = project.extensions.create("runtime", KremaRuntimeExtension::class.java)
-        // 自带 JVM 基础能力：与 Gradle 自带的 ApplicationPlugin 一样，在 apply 里挂上 java 插件，
-        // 用户不必在脚本里先写别的插件。toolchain 25 由根构建在 java 插件上统一挂。
+        // 本插件配置期就要读 sourceSets / runtimeClasspath / JavaPluginExtension（见 kremaApplicationClasspath、
+        // targetBytecodeVersion），这些只有 java 插件提供。这里主动 apply，用户只挂 krema 即可，不必先写 java/kotlin。
         project.pluginManager.apply(JavaPlugin::class.java)
         project.registerKremaTasks()
     }
