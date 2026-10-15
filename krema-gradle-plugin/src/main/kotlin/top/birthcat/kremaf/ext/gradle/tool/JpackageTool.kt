@@ -65,6 +65,7 @@ class JpackageTool(
                 )
                 // --java-options 须各占一参：值含空格才不会被拆散。
                 addAll(javaOptions(platform).flatMap { listOf("--java-options", it) })
+                addAll(macPackageIdentifier(platform, settings.identifier))
                 settings.icon?.let { addAll(listOf("--icon", it.toString())) }
             }
         run(command, "jpackage 生成 app-image 失败")
@@ -99,6 +100,7 @@ class JpackageTool(
                     ),
                 )
                 icon?.let { addAll(listOf("--icon", it.toString())) }
+                addAll(macPackageIdentifier(format.platform, settings.identifier))
             }
         run(command, "jpackage 生成 ${format.id} 失败")
     }
@@ -111,6 +113,12 @@ class JpackageTool(
             add("--enable-native-access=ALL-UNNAMED")
             if (platform == Platform.DARWIN) add("-XstartOnFirstThread")
         }
+
+    // macOS 需显式 bundle 标识防版本间漂移；非 macOS 无此选项会被拒，故门控。
+    private fun macPackageIdentifier(
+        platform: Platform,
+        identifier: String,
+    ): List<String> = if (platform == Platform.DARWIN) listOf("--mac-package-identifier", identifier) else emptyList()
 
     @Throws(GradleException::class)
     private fun run(

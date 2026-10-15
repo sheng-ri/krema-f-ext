@@ -10,6 +10,12 @@ object KremaTaskNames {
     const val INIT = "kremaInit"
     const val BUILD = "kremaBuild"
 
+    /** 专用 app jar：kremaBuild 依赖它，由标准 Jar task 产出（classes + resources + Main-Class）。 */
+    const val APP_JAR = "kremaAppJar"
+
+    /** 前端 dist 打的 assets jar：kremaBuild 依赖它，由标准 Jar task 产出（内容落在 `assets/` 下）。 */
+    const val ASSETS_JAR = "kremaAssetsJar"
+
     /** 未压缩、可直接运行的 app-image 目录：`kremaBundle` 产出，是所有平台包的共同底座。 */
     const val BUNDLE = "kremaBundle"
 
@@ -44,6 +50,8 @@ object KremaTaskNames {
         listOf(
             INIT,
             BUILD,
+            APP_JAR,
+            ASSETS_JAR,
             FRONTEND_BUILD,
             RUNTIME_IMAGE,
             JDEPS_MODULES,

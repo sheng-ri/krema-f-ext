@@ -10,12 +10,16 @@ import org.gradle.api.Project
 import org.gradle.api.file.Directory
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.provider.Provider
+import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.jvm.toolchain.JavaToolchainService
+import top.birthcat.kremaf.ext.gradle.config.ASSETS_DIR
 import top.birthcat.kremaf.ext.gradle.config.BUNDLE_DIR_NAME
 import top.birthcat.kremaf.ext.gradle.config.KremaConfig
 import top.birthcat.kremaf.ext.gradle.config.KremaConfigLoader
 import top.birthcat.kremaf.ext.gradle.config.KremaExtension
+import top.birthcat.kremaf.ext.gradle.config.appJarName
+import top.birthcat.kremaf.ext.gradle.config.assetsJarName
 import top.birthcat.kremaf.ext.gradle.config.platformOutputDirName
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.domain.PlatformDetector
@@ -81,17 +85,35 @@ internal fun Project.registerKremaTasks() {
         task.group = KremaTaskNames.GROUP
         task.description = "Assemble backend and frontend: build the app jar and a separate assets jar into lib/"
         task.configureProject(ext)
-        // 编译交回 Gradle：kremaBuild 跑在 compileJava / processResources 之后。
+        // 编译交回 Gradle：kremaBuild 跑在
+        // compileJava / processResources 之后。
         task.dependsOn(tasks.named("classes"))
-        // 前端 dist 是 kremaBuild 的共用前置：声明成依赖后它才成为可缓存、UP-TO-DATE 的产出。
-        task.dependsOn(tasks.named(KremaTaskNames.FRONTEND_BUILD))
-        // 后端 classpath：主类产出与资源目录（目录形态）+ 运行期依赖 jar（文件形态），都进 app jar。
-        task.classpathFiles.from(classpath.classesDirs)
-        task.classpathFiles.from(classpath.runtimeClasspath)
-        // 前端 dist 打进独立的 assets jar；dev/prod 不分区，整包始终带前端资源。
-        task.distFiles.from(
-            tasks.named(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java).map { it.distDir },
-        )
+        // app jar 不复用工程 jar，避免 lib/ 里出现两份工程类。
+        val settings = task.bundleSettings()
+        val mainClass = settings.mainClass
+        val archiveName = appJarName(settings)
+        val appJarTask =
+            tasks.register(KremaTaskNames.APP_JAR, Jar::class.java) { jar ->
+                jar.from(classpath.classesDirs)
+                classpath.resourcesDir?.let { jar.from(it) }
+                jar.manifest { it.attributes(mapOf("Main-Class" to mainClass)) }
+                jar.archiveFileName.set(archiveName)
+            }
+        task.appJar.set(appJarTask.flatMap { it.archiveFile })
+        // 依赖 jar：runtimeClasspath 剔除工程自身 jar，
+        // 避免 lib/ 里出现两份工程类。
+        task.dependencyJars.from(classpath.runtimeClasspath.minus(appJarTask.flatMap { it.archiveFile }))
+        // 前端 dist 打进独立 assets jar（内容落在 assets/ 下），与后端一起由 kremaBuild 聚到 lib/。
+        val assetsJarTask =
+            tasks.register(KremaTaskNames.ASSETS_JAR, Jar::class.java) { jar ->
+                jar.from(
+                    tasks
+                        .named(KremaTaskNames.FRONTEND_BUILD, KremaFrontendBuildTask::class.java)
+                        .map { it.distDir },
+                ) { it.into(ASSETS_DIR) }
+                jar.archiveFileName.set(assetsJarName(settings))
+            }
+        task.assetsJar.set(assetsJarTask.flatMap { it.archiveFile })
     }
 
     tasks.register(KremaTaskNames.RUNTIME_IMAGE, KremaRuntimeImageTask::class.java) { task ->

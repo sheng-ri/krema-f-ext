@@ -26,6 +26,7 @@ fun main() {
             .identifier("com.example.kremademo")
             .size(1280, 1024)
             .prodAssets("/assets")
+            .noBuiltinPlugins()
             .commands(NoteCommands())
     // devUrl 一旦非空，krema-core 就整个走 dev 分支、不再起 AssetServer。
     // 故只在真有 dev server 时才设：打包出来的 app 不带这个变量，走 prodAssets 出前端。
