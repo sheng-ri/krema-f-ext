@@ -3,8 +3,8 @@
 .verify: &verify
   name: 构建与格式检查 + e2e
   script:
-    - ./gradlew -p krema-gradle-plugin spotlessCheck test --configuration-cache
-    - ./gradlew -p krema-demo spotlessCheck test --configuration-cache
+    - (cd krema-gradle-plugin && ./gradlew spotlessCheck test --configuration-cache)
+    - (cd krema-demo && ./gradlew spotlessCheck test --configuration-cache)
     - bash scripts/e2e.sh
 
 # 构建环境：本仓 Dockerfile 动态构建，平台按 hash 缓存。
@@ -24,7 +24,7 @@
 .publish: &publish
   name: 发布到 maven registry
   script:
-    - ./gradlew -p krema-gradle-plugin publish --configuration-cache
+    - (cd krema-gradle-plugin && ./gradlew publish --configuration-cache)
 
 # 分支键写 "$" 兜底，任何分支的 push / PR 都过门禁。
 $:
@@ -46,7 +46,7 @@ $:
       # 每次打开开发环境自动执行，安装 skills。
       env:
         CODEBUDDY_IS_SANDBOX: 1
-        CNB_WELCOME_CMD: source /workspace/scripts/setup-agent.sh
+        CNB_WELCOME_CMD: source /workspace/scripts/setup-devenv.sh
 
   pull_request:
     verify:
@@ -74,4 +74,4 @@ v*:
         - *verify
         - name: 发布到 maven registry
           script:
-            - ./gradlew -p krema-gradle-plugin publish --configuration-cache -Pversion="${CNB_BRANCH#v}"
+            - (cd krema-gradle-plugin && ./gradlew publish --configuration-cache -Pversion="${CNB_BRANCH#v}")

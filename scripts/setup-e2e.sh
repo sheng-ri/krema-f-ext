@@ -9,12 +9,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-# --- pnpm：demo 前端构建要用 ---
-if ! command -v pnpm >/dev/null 2>&1; then
-  echo "== 安装 pnpm =="
-  npm install -g pnpm@9
-fi
-
 # --- appimagetool：AppImage 封装要用，放进 PATH ---
 # 工具本身是 AppImage，CI 镜像里也是同一份；本机缺了就下载到 /usr/local/bin。
 if ! command -v appimagetool >/dev/null 2>&1; then

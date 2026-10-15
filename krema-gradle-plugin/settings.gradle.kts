@@ -1,4 +1,4 @@
-rootProject.name = "krema-plugin-build"
+rootProject.name = "krema-gradle-plugin"
 
 pluginManagement {
     repositories {

@@ -10,15 +10,20 @@ Krema 是一套 Java + 系统 WebView 的桌面框架，上游自带一个 `krem
 | 模块 | 职责 |
 |---|---|
 | `krema-gradle-plugin` | Gradle 插件本体：声明 task、绑定输入输出、实现 Krema 的构建编排 |
+| `krema-demo` | 消费插件的示例工程，也是 e2e 的载体 |
+
+两个模块各自独立成 Gradle 根，各自带 wrapper，没有根构建。
 
 ## 构建
 
 需要 JDK 25。Wrapper 已锁 Gradle 9.8，直接用即可。
 
 ```bash
-./gradlew build          # 编译 + 测试 + 格式检查
-./gradlew spotlessCheck  # 只跑格式检查
-./gradlew spotlessApply  # 自动修格式
+./krema-gradle-plugin/gradlew build          # 编译 + 测试 + 格式检查
+./krema-gradle-plugin/gradlew spotlessCheck  # 只跑格式检查
+./krema-gradle-plugin/gradlew spotlessApply  # 自动修格式
+
+./krema-demo/gradlew build                   # demo 同样一套
 ```
 
 ## 插件

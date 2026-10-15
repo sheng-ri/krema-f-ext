@@ -1,8 +1,10 @@
 #!/bin/bash
 # 每次新开环境都执行
 
-# git 是下方 git clone 的前提；缺失则明确中止，不静默跳过。
-command -v git >/dev/null 2>&1 || { echo "需要 git，但环境中未找到，install-skills 中止"; exit 1; }
+npm install -g pnpm
+
+cd /workspace/krema-demo/
+pnpm approve-builds --all
 
 git clone --depth 1 https://cnb.cool/BirthCat/mirror/ponytail.git /opt/ponytail \
     && codebuddy plugin marketplace add /opt/ponytail \

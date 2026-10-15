@@ -4,7 +4,7 @@
 # 对 krema-demo 真跑任务、断言磁盘产物与真实进程，不依赖 TestKit：跑的是真实工程，断言写不成「顺着实现摆位置」。
 # pnpm、appimagetool 与桌面环境（Xvfb/WebKit/xwininfo）装在构建镜像里（见 .cnb/build/Dockerfile），本脚本不再联网自举工具链。
 #
-# 用法：从仓库根目录运行（依赖 ./gradlew）。
+# 用法：从仓库根目录运行（依赖 krema-demo/gradlew）。
 #
 # 全程带 daemon（不加 --no-daemon）：run task 把子进程输出泵回 Gradle 的 task 流，只有真经
 # daemon 才验得到这条链路 —— inheritIO() 那版输出掉进 daemon 的 fd，console 上一行都没有，
@@ -38,9 +38,9 @@ has_window() {
 }
 
 # 一次调用把整张任务图（build → runtime → bundle → platform）都跑出来：
-# 拆成多个 ./gradlew 调用会让每一步各自存一份不同的配置缓存入口，二次跑就复不到稳定入口、误判没命中 UP-TO-DATE。
+# 拆多次会各存一份不同的配置缓存入口，二次跑复不到稳定入口、误判没命中 UP-TO-DATE。
 echo "== kremaBundlePlatform（首次，构建整张图）=="
-./gradlew -p "$DEMO" kremaBundlePlatform --configuration-cache --no-daemon --project-cache-dir "$CACHE_DIR"
+"$DEMO/gradlew" -p "$DEMO" kremaBundlePlatform --configuration-cache --no-daemon --project-cache-dir "$CACHE_DIR"
 
 # --- 断言 lib ---
 LIB="$OUT/lib"
@@ -76,7 +76,7 @@ LAUNCHER="$BUNDLE_APP/bin/$NAME"
 echo "== kremaDevRun（进程启动验收）=="
 : > /tmp/krema-devrun.log
 set +e
-timeout 20 ./gradlew -p "$DEMO" kremaDevRun --configuration-cache --console=plain --project-cache-dir "$CACHE_DIR" > /tmp/krema-devrun.log 2>&1
+timeout 20 "$DEMO/gradlew" -p "$DEMO" kremaDevRun --configuration-cache --console=plain --project-cache-dir "$CACHE_DIR" > /tmp/krema-devrun.log 2>&1
 set -e
 grep -q 'Creating window' /tmp/krema-devrun.log || fail "kremaDevRun 未打印 Krema 初始化行：进程没起来或 classpath 接错"
 
@@ -116,7 +116,7 @@ done
 has_window && fail "display 上还有别的 Krema Demo 窗口（上一轮没清干净），本轮截图与窗口断言都不可信"
 
 echo "== kremaBundleRun（窗口与资源服务验收）=="
-./gradlew -p "$DEMO" kremaBundleRun --configuration-cache --console=plain --project-cache-dir "$CACHE_DIR" > "$RUN_LOG" 2>&1 &
+"$DEMO/gradlew" -p "$DEMO" kremaBundleRun --configuration-cache --console=plain --project-cache-dir "$CACHE_DIR" > "$RUN_LOG" 2>&1 &
 bundle_run_pid=$!
 
 # 收尾：无论走哪条分支都不留孤儿窗口与 Xvfb。kill 打断的是 gradle，
@@ -224,7 +224,7 @@ trap - EXIT
 
 # --- 断言二次执行命中 UP-TO-DATE ---
 # 指真正执行 jpackage 的 kremaBundle：聚合 task 无 action，对它断言恒真，掩盖了「第二次不重跑」。
-REBUILD=$(./gradlew -p "$DEMO" kremaBundle --configuration-cache --console=plain --project-cache-dir "$CACHE_DIR" 2>&1)
+REBUILD=$("$DEMO/gradlew" -p "$DEMO" kremaBundle --configuration-cache --console=plain --project-cache-dir "$CACHE_DIR" 2>&1)
 echo "$REBUILD" | grep -q "kremaBundle UP-TO-DATE" || fail "二次执行未命中 UP-TO-DATE"
 
 echo "E2E OK"

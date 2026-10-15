@@ -7,7 +7,7 @@
 # 只启动、不收尾：脚本退出后 vite 与 app 继续留着，方便反复调页面；
 # 下次执行会先杀掉上一轮再起新的。手动停用 pkill 命令见下方 CLEANUP_HINT。
 #
-# 用法：从仓库根目录运行（依赖 ./gradlew、pnpm、import）。
+# 用法：从仓库根目录运行（依赖 krema-demo/gradlew、pnpm、import）。
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -84,7 +84,7 @@ curl -s -o /dev/null --max-time 2 http://127.0.0.1:5173/ || fail "vite 没起来
 # --- kremaDevRun：app 进程 ---
 # 同样 detached：脚本退出后 app 要留着。日志落文件，下面按就绪标志判成功。
 echo "== 起 kremaDevRun =="
-setsid ./gradlew -p "$DEMO" kremaDevRun --console=plain > "$RUN_LOG" 2>&1 < /dev/null &
+setsid "$DEMO/gradlew" -p "$DEMO" kremaDevRun --console=plain > "$RUN_LOG" 2>&1 < /dev/null &
 
 # 窗口出现 ≠ 能拍到东西：webview 建窗口在前，渲染页面在后，
 # 只等窗口会拍到一张还没加载的空窗。故两个条件都要满足：窗口在，且 app 已进事件循环。
