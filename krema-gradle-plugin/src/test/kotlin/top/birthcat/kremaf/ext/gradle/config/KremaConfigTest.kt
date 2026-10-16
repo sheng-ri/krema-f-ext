@@ -5,26 +5,29 @@
 package top.birthcat.kremaf.ext.gradle.config
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import top.birthcat.kremaf.ext.gradle.config.KremaConfigLoader
 import java.nio.file.Files
 
 /** `krema.toml` 解析与缺省：不依赖 Gradle 注入的纯逻辑。 */
 class KremaConfigTest {
     @Test
-    @DisplayName("缺文件时全走默认值")
+    @DisplayName("缺文件时必填项全为空")
     fun defaultsWhenAbsent() {
         val dir = Files.createTempDirectory("krema-config")
         val config = KremaConfigLoader().loadOrDefault(dir.resolve("missing.toml"))
 
-        assertEquals("krema-app", config.packageName)
-        assertEquals("0.1.0", config.version)
-        assertEquals("com.example.app", config.identifier)
-        assertEquals("dist", config.build.outDir)
-        assertEquals(null, config.build.mainClass)
-        assertEquals(null, config.build.devUrl)
-        assertEquals(null, config.bundle.icon)
+        assertNull(config.packageName)
+        assertNull(config.version)
+        assertNull(config.identifier)
+        assertNull(config.build.outDir)
+        assertNull(config.build.mainClass)
+        assertNull(config.build.devUrl)
+        assertNull(config.frontend.buildCommand)
+        assertNull(config.bundle.icon)
     }
 
     @Test
@@ -62,5 +65,48 @@ class KremaConfigTest {
         val config = KremaConfigLoader().loadOrDefault(toml)
 
         assertEquals("icon.png", config.bundle.icon)
+    }
+
+    @Test
+    @DisplayName("TOML 语法错误抛错并带路径")
+    fun throwsOnBadToml() {
+        val dir = Files.createTempDirectory("krema-config")
+        val toml = dir.resolve("krema.toml")
+        Files.writeString(toml, "[package\nname = \"demo\"\n")
+
+        val error =
+            assertThrows(IllegalStateException::class.java) {
+                KremaConfigLoader().loadOrDefault(toml)
+            }
+
+        assertTrue(error.message!!.contains(toml.toString()), "报错应指到文件路径：${error.message}")
+    }
+
+    @Test
+    @DisplayName("必填缺失时取值抛错")
+    fun requiredThrowsWhenMissing() {
+        val error =
+            assertThrows(IllegalStateException::class.java) {
+                KremaConfig().packageName.required(PACKAGE_NAME_HINT)
+            }
+
+        assertTrue(error.message!!.contains("package.name"), "报错应指到配置项：${error.message}")
+    }
+
+    @Test
+    @DisplayName("主类缺失时解析抛错")
+    fun mainClassThrowsWhenMissing() {
+        assertThrows(IllegalStateException::class.java) {
+            resolveMainClass(KremaConfig(), null)
+        }
+    }
+
+    @Test
+    @DisplayName("主类覆盖值压过 toml")
+    fun mainClassOverrideWins() {
+        val config = KremaConfig(build = Build(mainClass = "com.example.Toml"))
+
+        assertEquals("com.example.Override", resolveMainClass(config, "com.example.Override"))
+        assertEquals("com.example.Toml", resolveMainClass(config, "  "))
     }
 }

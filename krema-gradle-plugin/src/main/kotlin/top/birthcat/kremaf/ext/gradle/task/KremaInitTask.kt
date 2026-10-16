@@ -14,6 +14,7 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.InitSettings
+import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.TemplateGenerator
 
 /**
@@ -23,6 +24,11 @@ import top.birthcat.kremaf.ext.gradle.TemplateGenerator
  */
 @DisableCachingByDefault(because = "生成骨架写进用户项目目录，输出不由本 task 独占")
 abstract class KremaInitTask : DefaultTask() {
+    init {
+        group = KremaTaskNames.GROUP
+        description = "Generate the Krema project scaffold (krema.toml + main class)"
+    }
+
     /** 骨架落点，默认当前项目目录。 */
     @get:Internal
     abstract val projectDir: DirectoryProperty

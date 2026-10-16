@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle.task
 
+import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
@@ -12,11 +13,14 @@ import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
+import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.config.BundleIcons
 import top.birthcat.kremaf.ext.gradle.config.BundleSettings
 import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
@@ -35,7 +39,20 @@ import javax.inject.Inject
  * JDK 路径进缓存键，换 JDK 即视为新产物；宿主平台也单独作为输入，避免把一个平台的包当另一个平台用。
  */
 @CacheableTask
-abstract class KremaBundleTask : KremaProjectTask() {
+abstract class KremaBundleTask : DefaultTask() {
+    init {
+        group = KremaTaskNames.GROUP
+        description = "Build a runnable, uncompressed app-image (build/krema/bundle) with the jlink-trimmed runtime"
+    }
+
+    /** 产物根目录。 */
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    /** 打包输入，`krema { }` 块的覆盖值已压过 toml。 */
+    @get:Internal
+    abstract val bundleSettings: Property<BundleSettings>
+
     /**
      * `kremaBuild` 聚好的 `lib/` 目录：app jar + 依赖 jar + assets jar。
      *
@@ -91,7 +108,7 @@ abstract class KremaBundleTask : KremaProjectTask() {
     @Throws(GradleException::class)
     fun bundle() {
         val platform = hostPlatform.get()
-        val settings = bundleSettings()
+        val settings = bundleSettings.get()
         val icon =
             resolveBundleIcon(
                 platform = platform,

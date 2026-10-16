@@ -9,7 +9,7 @@ group = "top.birthcat.kremaf-ext"
 version = providers.gradleProperty("version").getOrElse("0.1.0-SNAPSHOT")
 
 dependencies {
-    implementation(libs.toml4j)
+    implementation(libs.tomlj)
 
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

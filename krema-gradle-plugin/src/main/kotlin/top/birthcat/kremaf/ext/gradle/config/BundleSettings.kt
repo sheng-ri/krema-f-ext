@@ -74,17 +74,24 @@ fun resolveBundleIcon(
     return null
 }
 
-/** 主类解析：覆盖值（非空）> krema.toml > <identifier>.Main。 */
+/** 主类解析：覆盖值（非空）> krema.toml 的 `[build].main_class`，都没有即报错。 */
+@Throws(IllegalStateException::class)
 internal fun resolveMainClass(
     config: KremaConfig,
     override: String?,
-): String = override?.takeIf { it.isNotBlank() } ?: config.build.mainClass ?: "${config.identifier}.Main"
+): String = override?.takeIf { it.isNotBlank() } ?: config.build.mainClass.required("主类：krema.mainClass 或 krema.toml 的 build.main_class")
 
 /** 对应 jpackage 的 `--main-jar`。 */
-fun appJarName(settings: BundleSettings): String = "${settings.appName}.jar"
+fun appJarName(settings: BundleSettings): String = appJarName(settings.appName)
 
 /** 与 app jar 同落 `lib/`。 */
-fun assetsJarName(settings: BundleSettings): String = "${settings.appName}-assets.jar"
+fun assetsJarName(settings: BundleSettings): String = assetsJarName(settings.appName)
+
+/** 凭应用名拼 app jar 名（jar 名与主类无关，仅需 appName）。 */
+fun appJarName(appName: String): String = "$appName.jar"
+
+/** 凭应用名拼 assets jar 名。 */
+fun assetsJarName(appName: String): String = "$appName-assets.jar"
 
 /** app-image 启动器封装：只换算「产物目录 + 平台 → 可执行文件/进程」，启动器由 jpackage 摆放。 */
 class PlatformBundler(

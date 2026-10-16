@@ -35,7 +35,8 @@ abstract class KremaExtension {
     /**
      * 开发期前端 dev server 地址，注入给 `kremaDevRun` 起的应用进程（环境变量 `KREMA_DEV_URL`）。
      *
-     * 覆盖 `krema.toml` 的 `[build].dev_url`；都不写则回落到内建默认 `http://localhost:5173`。
+     * 覆盖 `krema.toml` 的 `[build].dev_url`；两处都没写则报错 —— 没有默认值可回落，
+     * 插件猜的端口未必是用户前端工具链实际监听的端口。
      * 只在这一处给值，应用代码要不要读那个环境变量归它自己。
      */
     abstract val devUrl: Property<String>

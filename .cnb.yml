@@ -7,6 +7,14 @@
     - (cd krema-demo && ./gradlew spotlessCheck test --configuration-cache)
     - bash scripts/e2e.sh
 
+# e2e 截图由 e2e.sh 生成到工作区内，这里用 cnbcool/attachments 插件挂到本次 commit（14 天过期）。
+.upload-shot: &upload-shot
+  name: 上传 e2e 截图
+  image: cnbcool/attachments:latest
+  settings:
+    attachments:
+      "krema-demo/build/krema/krema-e2e-screenshot.png": 14
+
 # 构建环境：本仓 Dockerfile 动态构建，平台按 hash 缓存。
 # Gradle 缓存挂到构建节点，跨流水线复用依赖与 wrapper。
 .pipeline: &pipeline
@@ -34,10 +42,11 @@ $:
       <<: *pipeline
       stages:
         - *verify
+        - *upload-shot
 
   vscode:
     - docker:
-        image: docker.cnb.cool/birthcat/dev-kotlin-jvm-25:latest
+        image: docker.cnb.cool/birthcat/env/dev-krema-env:latest
       services:
         - vscode
         - docker
@@ -54,6 +63,7 @@ $:
       <<: *pipeline
       stages:
         - *verify
+        - *upload-shot
 
   # 应急手动发布：常规发布走 tag，此按钮仅作兜底。
   web_trigger_release:
@@ -62,6 +72,7 @@ $:
       <<: *pipeline
       stages:
         - *verify
+        - *upload-shot
         - *publish
 
 # 发布：推送 v* 标签即发版，版本取标签名去掉 v 前缀（v0.2.0 -> 0.2.0）。门禁过了才发。

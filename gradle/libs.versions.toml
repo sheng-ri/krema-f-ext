@@ -1,11 +1,11 @@
 [versions]
 junit = "5.11.4"
-toml4j = "0.7.2"
+tomlj = "2.2.0"
 spotless = "8.10.3"
 kotlin = "2.4.20"
 
 [libraries]
-toml4j = { module = "com.moandjiezana.toml:toml4j", version.ref = "toml4j" }
+tomlj = { module = "org.tomlj:tomlj", version.ref = "tomlj" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 

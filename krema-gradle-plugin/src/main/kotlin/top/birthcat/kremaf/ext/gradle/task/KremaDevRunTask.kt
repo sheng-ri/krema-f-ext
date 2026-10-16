@@ -4,12 +4,8 @@
  */
 package top.birthcat.kremaf.ext.gradle.task
 
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.JavaExec
 import top.birthcat.kremaf.ext.gradle.KremaTaskNames
-import top.birthcat.kremaf.ext.gradle.config.KremaConfig
-import top.birthcat.kremaf.ext.gradle.config.resolveMainClass
 
 /**
  * 开发期：在 classpath 上起后端应用进程，把前端 dev server 地址作为环境变量 `KREMA_DEV_URL` 注入。
@@ -18,51 +14,13 @@ import top.birthcat.kremaf.ext.gradle.config.resolveMainClass
  * `krema.toml` 的 `[build].main_class`，前台运行、构建被中断时由 Gradle 回收子进程。
  * 不依赖 `kremaBuild` / `kremaFrontendBuild`：前端由使用方自己的 dev server 提供。
  *
- * `devUrl` 取值：`krema.toml` 的 `[build].dev_url` 作底，`krema { devUrl }` 覆盖，内建默认
- * `http://localhost:5173`。注入只是给应用代码一个约定键 —— 用不用归用户代码。
+ * 覆盖值（主类、devUrl）由注册期从 [top.birthcat.kremaf.ext.gradle.config.ResolvedKremaConfig] 直接 bind：
+ * `devUrl` 取值：`krema.toml` 的 `[build].dev_url` 作底，`krema { devUrl }` 覆盖，两处都没写即报错。
+ * 注入只是给应用代码一个约定键 —— 用不用归用户代码。
  */
-abstract class KremaDevRunTask : org.gradle.api.tasks.JavaExec() {
-    /** `krema.toml` 的绝对路径。 */
-    @get:Internal
-    abstract val configFilePath: org.gradle.api.provider.Property<String>
-
-    /** 用户是否在 `krema { }` 里显式给了 `configFile`：显式指定却缺失时 [loadKremaConfig] 硬失败指到路径，未指定时缺失即回落约定位置。 */
-    @get:Input
-    abstract val configFileSetExplicitly: org.gradle.api.provider.Property<Boolean>
-
-    /** 主类，覆盖 `krema.toml` 的 `[build].main_class`。 */
-    @get:Input
-    @get:Optional
-    abstract val mainClassOverride: org.gradle.api.provider.Property<String>
-
-    /** 开发期前端地址，覆盖 `krema.toml` 的 `[build].dev_url`。 */
-    @get:Input
-    @get:Optional
-    abstract val devUrlOverride: org.gradle.api.provider.Property<String>
-
+abstract class KremaDevRunTask : JavaExec() {
     init {
         group = KremaTaskNames.GROUP
         description = "Run the backend app on the classpath, injecting KREMA_DEV_URL; long-lived, not part of CI gating"
-    }
-
-    @Throws(IllegalStateException::class)
-    private fun kremaConfig(): KremaConfig = loadKremaConfig(configFilePath.get(), configFileSetExplicitly.get())
-
-    /** 解析主类：`krema { }` 覆盖 `krema.toml` 的 `[build].main_class`，都没有时回落到 `<identifier>.Main`。 */
-    @Throws(IllegalStateException::class)
-    internal fun resolvedMainClass(): String {
-        val config = kremaConfig()
-        return resolveMainClass(config, mainClassOverride.orNull)
-    }
-
-    /** 解析 `KREMA_DEV_URL`：`krema { devUrl }` 覆盖 `[build].dev_url`，都没有时回落到内建默认。 */
-    @Throws(IllegalStateException::class)
-    internal fun resolvedDevUrl(): String {
-        val config = kremaConfig()
-        return devUrlOverride.orNull ?: config.build.devUrl ?: DEFAULT_DEV_URL
-    }
-
-    private companion object {
-        const val DEFAULT_DEV_URL = "http://localhost:5173"
     }
 }

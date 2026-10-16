@@ -2,7 +2,7 @@
 
 ## 行为规范
 
-- 检查skill authoring-gradle-builds是否存在，不存在则执行install_gradle_skills
+- gradle相关api问题，请使用gradle相关skill（如果有）。
 
 ## 文档规范
 

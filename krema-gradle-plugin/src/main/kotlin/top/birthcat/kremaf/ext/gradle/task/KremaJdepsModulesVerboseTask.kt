@@ -14,6 +14,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import org.gradle.work.DisableCachingByDefault
+import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.tool.JdepsRunner
 import java.nio.file.Files
 import java.nio.file.Path
@@ -30,6 +31,11 @@ import javax.inject.Inject
  */
 @DisableCachingByDefault(because = "诊断报告：命中缓存不重跑就什么都看不到")
 abstract class KremaJdepsModulesVerboseTask : DefaultTask() {
+    init {
+        group = KremaTaskNames.GROUP
+        description = "Print per-package jdeps -v dependency details and write a report to build/krema/jdeps-verbose.txt"
+    }
+
     /** 应用运行所需的 classpath，模块推导的输入。 */
     @get:Classpath
     abstract val classpathFiles: ConfigurableFileCollection

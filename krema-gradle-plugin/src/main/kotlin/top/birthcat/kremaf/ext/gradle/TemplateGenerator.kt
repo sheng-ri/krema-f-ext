@@ -63,6 +63,7 @@ class TemplateGenerator {
         |frontend_command = "npm run build"
         |out_dir = "dist"
         |main_class = "${settings.javaPackage}.Main"
+        |dev_url = "http://localhost:5173"
         |
         """.trimMargin()
 

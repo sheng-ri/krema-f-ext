@@ -82,9 +82,9 @@ done
 curl -s -o /dev/null --max-time 2 http://127.0.0.1:5173/ || fail "vite 没起来，见 /tmp/krema-shot-vite.log"
 
 # --- kremaDevRun：app 进程 ---
-# 同样 detached：脚本退出后 app 要留着。日志落文件，下面按就绪标志判成功。
+# 同样 detached：脚本退出后 app 要留着。gradle 输出既显示到终端也落文件，下面按就绪标志判成功。
 echo "== 起 kremaDevRun =="
-setsid "$DEMO/gradlew" -p "$DEMO" kremaDevRun --console=plain > "$RUN_LOG" 2>&1 < /dev/null &
+setsid sh -c "$DEMO/gradlew -p $DEMO kremaDevRun --console=plain < /dev/null 2>&1 | tee $RUN_LOG" &
 
 # 窗口出现 ≠ 能拍到东西：webview 建窗口在前，渲染页面在后，
 # 只等窗口会拍到一张还没加载的空窗。故两个条件都要满足：窗口在，且 app 已进事件循环。

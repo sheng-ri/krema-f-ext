@@ -14,6 +14,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import org.gradle.work.DisableCachingByDefault
+import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.tool.JdepsRunner
 import java.nio.file.Path
 import javax.inject.Inject
@@ -21,12 +22,16 @@ import javax.inject.Inject
 /**
  * 打出 jdeps 推导出的运行时模块清单，让用户在裁镜像之前先看清依赖。
  *
- * 直接继承 [DefaultTask] 而非 Krema 的基类：它既不读 `krema.toml` 也不产出文件，挂上
- * `KremaConfigTask` 会拖进一堆无关的 toml 输入，挂上 `KremaProjectTask` 还会把 `build/krema`
- * 声明成输出目录，与 kremaBuild 等 task 撞成重叠输出。
+ * 直接继承 [DefaultTask]：它既不读 `krema.toml` 也不产出文件，没有打包输入要 bind，
+ * 若声明 `build/krema` 为输出目录还会与 kremaBuild 等 task 撞成重叠输出。
  */
 @DisableCachingByDefault(because = "只打印推导结果，不产出文件")
 abstract class KremaJdepsModulesTask : DefaultTask() {
+    init {
+        group = KremaTaskNames.GROUP
+        description = "Print the runtime module list derived from jdeps, without trimming an image"
+    }
+
     /** 应用运行所需的 classpath，模块推导的输入。 */
     @get:Classpath
     abstract val classpathFiles: ConfigurableFileCollection

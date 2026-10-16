@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle.task
 
+import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
@@ -18,6 +19,7 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
+import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.domain.commandLineFor
 import top.birthcat.kremaf.ext.gradle.tool.capture
 import javax.inject.Inject
@@ -33,14 +35,32 @@ import javax.inject.Inject
  * 同一 task 不允许出现「父目录 + 子目录」两份输出，故把 [outputDir] 改标成 [Internal]。
  */
 @CacheableTask
-abstract class KremaFrontendBuildTask : KremaProjectTask() {
+abstract class KremaFrontendBuildTask : DefaultTask() {
+    init {
+        group = KremaTaskNames.GROUP
+        // out_dir 是前端工具链自己的落点，插件只能按它读：读错地方 prod 的 app jar 就空 assets。
+        description = "Run the frontend production build (npm); output dir from krema.toml out_dir, declared as cacheable"
+    }
+
     /** 产物根目录仅作 [distDir] 的基准，本身不是本 task 的产物。 */
     @get:Internal
-    abstract override val outputDir: DirectoryProperty
+    abstract val outputDir: DirectoryProperty
 
     /** 前端生产构建命令，如 `npm run build`。 */
     @get:Input
     abstract val buildCommand: Property<String>
+
+    /**
+     * 前端工程目录：`package.json`、锁文件与 [distDir] 的解析基准，也是前端命令的工作目录。
+     *
+     * 与项目根分开是因为后者是 `krema.toml` 与图标的解析基准，两者的目录并不总是同一个。
+     *
+     * 标 [Internal] 不标 `@InputDirectory`：后者会让 Gradle 哈希整个前端目录（含 `node_modules`，
+     * 几万文件、每次 install 都变），up-to-date 与构建缓存全废。失效仍会正确发生 —— 本目录的移动
+     * 改的是 [distDir] 的位置，输出位置变了就不可能还是 UP-TO-DATE。
+     */
+    @get:Internal
+    abstract val frontendDir: DirectoryProperty
 
     /**
      * 前端依赖安装命令，如 `pnpm install`；不配就不装。

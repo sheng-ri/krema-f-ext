@@ -1,10 +1,27 @@
 #!/bin/bash
 # 每次新开环境都执行
 
+LOCK=/tmp/setup-devenv.sh.lock
+FORCE=0
+
+# 解析 -f / --force
+while getopts "f" opt; do
+  case "$opt" in
+    f) FORCE=1 ;;
+    *) echo "用法: $0 [-f]" >&2; exit 2 ;;
+  esac
+done
+
+if [[ -e "$LOCK" && "$FORCE" -eq 0 ]]; then
+  echo "已执行过（$LOCK 存在），跳过。加 -f 可强制重跑。"
+  exit 0
+fi
+
 npm install -g pnpm@12
 
 cd /workspace/krema-demo/
 pnpm approve-builds --all
+cd /workspace
 
 git clone --depth 1 https://cnb.cool/BirthCat/mirror/ponytail.git /opt/ponytail \
     && codebuddy plugin marketplace add /opt/ponytail \
@@ -68,3 +85,7 @@ cat > ~/.codebuddy/.mcp.json <<'EOF'
   }
 }
 EOF
+
+codebuddy -y -p "执行mcp gradle installinstall_gradle_skills" &
+date '+%Y-%m-%d %H:%M:%S' > "$LOCK"
+echo "完成，已写入锁文件 $LOCK"

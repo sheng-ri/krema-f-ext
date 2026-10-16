@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle.task
 
+import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
@@ -16,6 +17,7 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
+import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.tool.JdepsRunner
 import top.birthcat.kremaf.ext.gradle.tool.JlinkTool
@@ -32,10 +34,15 @@ import javax.inject.Inject
  * 工具路径取自 JDK toolchain 而非 PATH：用户用别的 JDK 构建时，PATH 上的 jlink 可能根本不存在。
  */
 @CacheableTask
-abstract class KremaRuntimeImageTask : KremaProjectTask() {
+abstract class KremaRuntimeImageTask : DefaultTask() {
+    init {
+        group = KremaTaskNames.GROUP
+        description = "Derive modules via jdeps and trim a minimal runtime image with jlink (build/krema/runtime)"
+    }
+
     /** 产物根目录仅作 [runtimeImageDir] 的基准，本身不是本 task 的产物。 */
     @get:Internal
-    abstract override val outputDir: DirectoryProperty
+    abstract val outputDir: DirectoryProperty
 
     /** 应用运行所需的 classpath，模块推导的输入。声明成 `@Classpath` 才能按内容而非路径判变更。 */
     @get:Classpath

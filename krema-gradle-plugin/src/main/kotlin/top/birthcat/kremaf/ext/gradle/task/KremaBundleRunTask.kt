@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle.task
 
+import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
@@ -12,6 +13,8 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.KremaProcessCleanupService
+import top.birthcat.kremaf.ext.gradle.KremaTaskNames
+import top.birthcat.kremaf.ext.gradle.config.BundleSettings
 import top.birthcat.kremaf.ext.gradle.config.PlatformBundler
 import java.util.concurrent.TimeUnit
 
@@ -22,7 +25,12 @@ import java.util.concurrent.TimeUnit
  * run task 不产出文件，故不声明输出目录。
  */
 @DisableCachingByDefault(because = "起长驻进程，副作用是进程而非产物")
-abstract class KremaBundleRunTask : KremaConfigTask() {
+abstract class KremaBundleRunTask : DefaultTask() {
+    init {
+        group = KremaTaskNames.GROUP
+        description = "Run the application (long-lived, not part of CI gating)"
+    }
+
     /** 目标平台标识，形如 `linux-x86_64`。 */
     @get:Input
     abstract val target: Property<String>
@@ -31,6 +39,10 @@ abstract class KremaBundleRunTask : KremaConfigTask() {
     @get:Internal
     abstract val bundleDir: DirectoryProperty
 
+    /** 打包输入，`krema { }` 块的覆盖值已压过 toml。 */
+    @get:Internal
+    abstract val bundleSettings: Property<BundleSettings>
+
     /** 进程回收服务，由注册期注入。 */
     @get:Internal
     abstract val cleanupService: Property<KremaProcessCleanupService>
@@ -38,7 +50,7 @@ abstract class KremaBundleRunTask : KremaConfigTask() {
     @TaskAction
     @Throws(GradleException::class)
     fun run() {
-        val settings = bundleSettings(bundleDir.get().asFile.toPath())
+        val settings = bundleSettings.get()
         val bundler = PlatformBundler(target.get())
         val cleanup = cleanupService.get()
 

@@ -4,60 +4,66 @@
  */
 package top.birthcat.kremaf.ext.gradle.config
 
-import com.moandjiezana.toml.Toml
+import org.tomlj.Toml
+import org.tomlj.TomlTable
 import java.nio.file.Files
 import java.nio.file.Path
 
 /**
  * `krema.toml` 的读取与解析。
  *
- * 自研：只复刻配置形状 —— 键名与默认值对齐上游 `krema-cli` 的 `KremaConfig`，解析器用 `com.moandjiezana.toml:toml4j`。
- * 解析失败或文件缺失时退回默认值，与上游 `loadOrDefault` 行为一致。
+ * 自研：只复刻配置形状 —— 键名与默认值对齐上游 `krema-cli` 的 `KremaConfig`，解析器用 `org.tomlj:toml4j`。
+ * 文件缺失时返回空 [KremaConfig]（缺哪项由必填校验报错）；`Toml.parse` 对非法 TOML 永不抛异常，错误落在
+ * [TomlTable.hasErrors]，所以要显式检查 —— 否则一个 `[buidle]` 拼写错误会被静默当成「配置全走默认」，
+ * 等到打包产出错名字的产物才被发现。
  */
 class KremaConfigLoader {
-    /** 文件缺失或解析异常都返回默认 [KremaConfig]。 */
+    /**
+     * 文件缺失时返回字段全空的 [KremaConfig]；存在但 TOML 非法时抛 [IllegalStateException]，附文件路径与解析错误。
+     *
+     * @throws IllegalStateException `krema.toml` 语法错误。
+     */
+    @Throws(IllegalStateException::class)
     fun loadOrDefault(path: Path): KremaConfig {
         if (!Files.isRegularFile(path)) return KremaConfig()
-        val toml = runCatching { Toml().read(path.toFile()) }.getOrNull() ?: return KremaConfig()
-        return fromToml(toml)
+        val config = Toml.parse(path)
+        if (config.hasErrors()) {
+            val detail = config.errors().joinToString("; ") { it.toString() }
+            throw IllegalStateException("krema.toml 语法错误：$path（$detail）")
+        }
+        return fromToml(config)
     }
 
-    private fun fromToml(toml: Toml): KremaConfig {
-        val pkg = toml.getTable("package")
-        val build = toml.getTable("build")
-        val bundle = toml.getTable("bundle")
-        val deepLink = toml.getTable("deep-link")
-
-        return KremaConfig(
-            packageName = pkg?.getString("name", "krema-app") ?: "krema-app",
-            version = pkg?.getString("version", "0.1.0") ?: "0.1.0",
-            identifier = pkg?.getString("identifier", "com.example.app") ?: "com.example.app",
-            build = fromBuild(build),
-            frontend = fromFrontend(build),
-            bundle = fromBundle(bundle),
-            deepLinkSchemes = deepLink?.getList<String>("schemes") ?: emptyList(),
+    private fun fromToml(toml: TomlTable): KremaConfig =
+        KremaConfig(
+            packageName = toml.getString("package.name"),
+            version = toml.getString("package.version"),
+            identifier = toml.getString("package.identifier"),
+            build = fromBuild(toml),
+            frontend = fromFrontend(toml),
+            bundle = fromBundle(toml),
+            deepLinkSchemes = toml.getArrayOrEmpty("deep-link.schemes").toList().filterIsInstance<String>(),
         )
-    }
 
-    private fun fromBuild(toml: Toml?): Build =
+    private fun fromBuild(toml: TomlTable): Build =
         Build(
-            outDir = toml?.getString("out_dir", "dist") ?: "dist",
-            mainClass = toml?.getString("main_class"),
-            devUrl = toml?.getString("dev_url"),
+            outDir = toml.getString("build.out_dir"),
+            mainClass = toml.getString("build.main_class"),
+            devUrl = toml.getString("build.dev_url"),
         )
 
     /** 前端目录与命令落在 `[build]` 段的 `frontend_*` 键上，但住处是 [Frontend]。 */
-    private fun fromFrontend(toml: Toml?): Frontend =
+    private fun fromFrontend(toml: TomlTable): Frontend =
         Frontend(
-            dir = toml?.getString("frontend_dir"),
-            buildCommand = toml?.getString("frontend_command", "npm run build") ?: "npm run build",
-            installCommand = toml?.getString("frontend_install_command"),
+            dir = toml.getString("build.frontend_dir"),
+            buildCommand = toml.getString("build.frontend_command"),
+            installCommand = toml.getString("build.frontend_install_command"),
         )
 
-    private fun fromBundle(toml: Toml?): Bundle =
+    private fun fromBundle(toml: TomlTable): Bundle =
         Bundle(
-            icon = toml?.getString("icon"),
-            identifier = toml?.getString("identifier"),
-            copyright = toml?.getString("copyright"),
+            icon = toml.getString("bundle.icon"),
+            identifier = toml.getString("bundle.identifier"),
+            copyright = toml.getString("bundle.copyright"),
         )
 }
