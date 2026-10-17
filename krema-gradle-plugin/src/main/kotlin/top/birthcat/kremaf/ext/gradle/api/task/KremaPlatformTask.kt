@@ -57,7 +57,8 @@ abstract class KremaPlatformTask : DefaultTask() {
      * Windows installer flags from the bundle.windows table; unset on every other format.
      *
      * jpackage rejects the `--win-*` family outside Windows installers, so the property stays
-     * empty unless this task produces an exe or msi.
+     * empty unless this task produces an exe or msi — hence optional: a missing value is the input,
+     * not a configuration mistake.
      */
     @get:Nested
     @get:Optional
