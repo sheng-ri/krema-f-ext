@@ -7,8 +7,6 @@ package top.birthcat.kremaf.ext.gradle.domain
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import top.birthcat.kremaf.ext.gradle.domain.Platform
-import top.birthcat.kremaf.ext.gradle.domain.commandLineFor
 
 /** 命令拼装：非 Windows 按空白切分，Windows 借道 `cmd /c`。 */
 class CommandLineTest {

@@ -5,6 +5,7 @@
 package top.birthcat.kremaf.ext.gradle.task
 
 import org.gradle.api.tasks.JavaExec
+import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 
 /**
@@ -18,6 +19,7 @@ import top.birthcat.kremaf.ext.gradle.KremaTaskNames
  * `devUrl` 取值：`krema.toml` 的 `[build].dev_url` 作底，`krema { devUrl }` 覆盖，两处都没写即报错。
  * 注入只是给应用代码一个约定键 —— 用不用归用户代码。
  */
+@DisableCachingByDefault(because = "启动前后端开发进程，无文件产物；缓存命中会跳过启动")
 abstract class KremaDevRunTask : JavaExec() {
     init {
         group = KremaTaskNames.GROUP

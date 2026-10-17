@@ -7,7 +7,6 @@ package top.birthcat.kremaf.ext.gradle.config
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import top.birthcat.kremaf.ext.gradle.config.selectHostFormats
 import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 
