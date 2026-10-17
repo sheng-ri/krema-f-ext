@@ -42,29 +42,43 @@ internal class ResolvedKremaConfig(
         ext.frontend.installCommand
             .orElse(kremaConfig.map { it.frontend.installCommand })
 
-    /** 前端产物目录：ext 优先，缺配置即报错。 */
-    val frontendOutDir =
-        ext.frontendOutDir
-            .map { it.asFile.absolutePath }
-            .orElse(kremaConfig.map { it.build.frontendOutDir ?: it.build.outDir })
-            .map { projectDir.dir(it.required(FRONTEND_OUT_DIR_HINT)) }
-
-    /** Java 源码根；缺省落回 Gradle 默认。SrcDir 不接受无值 provider，故始终有值。 */
-    val javaSourceDir =
-        kremaConfig.map { config -> projectDir.dir(config.build.javaSourceDir ?: DEFAULT_JAVA_SOURCE_DIR) }
-
-    /** 前端工程目录，缺省项目根。 */
+    /** 前端工程目录，缺省项目根；同时是 toml 里相对产物路径的解析基准。 */
     val frontendDir =
         ext.frontend.dir
             .orElse(kremaConfig.map { it.frontend.dir ?: "." })
             .map { projectDir.dir(it) }
 
-    /** 主类，ext 优先，缺配置即报错。 */
+    /**
+     * 前端产物目录：ext 优先，缺配置即报错。
+     *
+     * toml 里的相对路径按 [frontendDir] 解析，与前端命令的工作目录一致（vite 的 root 就是它）；
+     * 按项目根解析会把 `frontend_dir = "front"` + `out_dir = "dist"` 拆成两个地方。
+     */
+    val frontendOutDir =
+        ext.frontendOutDir
+            .map { it.asFile.absolutePath }
+            .orElse(
+                frontendDir.zip(kremaConfig) { dir, config ->
+                    val out = config.build.frontendOutDir ?: config.build.outDir
+                    if (out == null) dir.asFile.absolutePath else dir.dir(out).asFile.absolutePath
+                },
+            ).map { projectDir.dir(it.required(FRONTEND_OUT_DIR_HINT)) }
+
+    /** Java 源码根；缺省落回 Gradle 默认。SrcDir 不接受无值 provider，故始终有值。 */
+    val javaSourceDir =
+        kremaConfig.map { config -> projectDir.dir(config.build.javaSourceDir ?: DEFAULT_JAVA_SOURCE_DIR) }
+
+    /**
+     * 主类，ext 优先，缺配置即报错。
+     *
+     * 去掉首尾空白：jpackage 把 `--main-class` 原样抄进启动器 cfg，而 jar 的 Main-Class
+     * 在清单里两侧空白会被裁掉 —— toml 里多打一个空格，启动器就去找一个不存在的类。
+     */
     val mainClass =
         ext.mainClass
             .flatMap { v -> if (v.isNotBlank()) ext.mainClass else kremaConfig.map { it.build.mainClass } }
             .orElse(kremaConfig.map { it.build.mainClass })
-            .map { it.required(MAIN_CLASS_HINT) }
+            .map { it.required(MAIN_CLASS_HINT).trim() }
 
     /** 开发期前端地址，缺配置即报错。 */
     val devUrl =

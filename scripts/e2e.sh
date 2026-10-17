@@ -57,7 +57,7 @@ cleanup_desktop() {
 trap cleanup_desktop EXIT
 
 # 清掉上一轮残留窗口，避免旧窗口让本轮断言失真。
-pkill -f "$DEMO/build/krema/bundle/$NAME/bin/$NAME" 2>/dev/null || true
+pkill -f "$DEMO/build/krema/app/$NAME/bin/$NAME" 2>/dev/null || true
 pkill -f "$DEMO.*com.example.kremademo.Main" 2>/dev/null || true
 for _ in $(seq 1 20); do
   has_window || break
@@ -76,14 +76,11 @@ LIB="$OUT/deps"
 [ -f "$LIB/$NAME-assets.jar" ] || fail "缺少 assets jar：$LIB/$NAME-assets.jar"
 # 先验前端产物本身：kremaAssetsJar 只打包 dist，dist 空着不报错，只会产出空包，
 # 到这里才炸「没带 index.html」，把 vite 的失败（如 pnpm 拦了 esbuild 的 postinstall）藏掉。
-# 路径按 krema.toml 的 out_dir 拼：out_dir 相对项目根（krema.frontendOutDir 同为 layout.projectDirectory），
-# frontend_dir 只决定命令在哪个目录跑，不参与拼接——拼成 front/dist 会永远找不到文件。
+# out_dir 相对 frontend_dir 解析（vite 的 root 就是 frontend_dir），与前端命令的工作目录一致。
+FRONT_DIR=$(sed -n 's/^frontend_dir *= *"\(.*\)"/\1/p' "$DEMO/krema.toml")
 FRONT_OUT=$(sed -n 's/^out_dir *= *"\(.*\)"/\1/p' "$DEMO/krema.toml")
-FRONT_DIST="$DEMO/${FRONT_OUT:-dist}"
-if [ ! -f "$FRONT_DIST/index.html" ]; then
-  # 报错带上 frontend_dir 里的实际目录：out_dir 与前端工具链的落点对不上时，这里一眼看得出来。
-  fail "前端产物缺 index.html：$FRONT_DIST（前端构建没成功；$(sed -n 's/^frontend_dir *= *"\(.*\)"/\1/p' "$DEMO/krema.toml")/ 下现有 $(ls -d "$DEMO"/front/*/ 2>/dev/null | xargs -r -n1 basename | tr '\n' ' ')）"
-fi
+FRONT_DIST="$DEMO/${FRONT_DIR:-.}/${FRONT_OUT:-dist}"
+[ -f "$FRONT_DIST/index.html" ] || fail "前端产物缺 index.html：$FRONT_DIST（前端构建没成功）"
 # unzip -l 的列表首列带前导空格、还会混进目录条目；读内容判定，免得条目格式变了断言跟着飘。
 unzip -p "$LIB/$NAME-assets.jar" assets/index.html > /dev/null 2>&1 || fail "assets jar 没带 assets/index.html"
 
@@ -93,10 +90,18 @@ grep -q "main_class = \"$MAIN_CLASS\"" "$DEMO/krema.toml" || fail "app jar 的 M
 
 [ -x "$OUT/runtime/bin/java" ] || fail "运行时镜像里没有可执行 java"
 
-BUNDLE_APP="$OUT/bundle/$NAME"
+BUNDLE_APP="$OUT/app/$NAME"
 [ -d "$BUNDLE_APP" ] || fail "app-image 目录不存在：$BUNDLE_APP"
 LAUNCHER="$BUNDLE_APP/bin/$NAME"
 [ -x "$LAUNCHER" ] || fail "app-image 启动器不可执行：$LAUNCHER"
+
+# 启动器读的是 jpackage 写的 lib/app/<name>.cfg，不是 jar 清单：两处主类不一致时窗口要等
+# app 起来才炸，报错还只指向 ClassNotFoundException。这里先按 jar 自报的主类核对。
+CFG="$BUNDLE_APP/lib/app/$NAME.cfg"
+[ -f "$CFG" ] || fail "缺少启动器配置：$CFG"
+CFG_MAIN=$(grep '^app.mainclass=' "$CFG" | cut -d= -f2-)
+[ "$CFG_MAIN" = "$MAIN_CLASS" ] ||
+    fail "启动器主类（$CFG_MAIN）与 jar 清单（$MAIN_CLASS）不一致：$CFG"
 
 [ -f "$OUT/platform/appimage/$NAME.AppImage" ] || fail "缺少 AppImage：$OUT/platform/appimage/$NAME.AppImage"
 [ -n "$(find "$OUT/platform/deb" -maxdepth 1 -name '*.deb' -print -quit)" ] || fail "缺少 deb 产物：$OUT/platform/deb/"
