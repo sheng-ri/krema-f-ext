@@ -57,7 +57,7 @@ cleanup_desktop() {
 trap cleanup_desktop EXIT
 
 # 清掉上一轮残留窗口，避免旧窗口让本轮断言失真。
-pkill -f "$DEMO/build/krema/bundle/$NAME/bin/$NAME" 2>/dev/null || true
+pkill -f "$DEMO/build/krema/app/$NAME/bin/$NAME" 2>/dev/null || true
 pkill -f "$DEMO.*com.example.kremademo.Main" 2>/dev/null || true
 for _ in $(seq 1 20); do
   has_window || break
@@ -70,18 +70,24 @@ echo "== kremaBundlePlatform（首次，构建整张图）=="
 "$DEMO/gradlew" -p "$DEMO" kremaBundlePlatform --configuration-cache --no-daemon --project-cache-dir "$CACHE_DIR"
 
 # --- 断言产物 ---
-LIB="$OUT/lib"
-[ -f "$LIB/$NAME.jar" ] || fail "缺少 app jar：$LIB/$NAME.jar"
-[ -f "$LIB/$NAME-assets.jar" ] || fail "缺少 assets jar：$LIB/$NAME-assets.jar"
-unzip -l "$LIB/$NAME-assets.jar" | grep -q "assets/index.html" || fail "assets jar 没带 assets/index.html"
+# 布局由插件常量决定（internal/config/Const.kt）：jar 进 build/krema/deps/ 交给 jpackage --input，
+# app-image 在 build/krema/app/。别按旧记忆在 lib/ 与 bundle/ 下找，那条路径早就不存在了。
+DEPS="$OUT/deps"
+[ -f "$DEPS/$NAME.jar" ] || fail "缺少 app jar：$DEPS/$NAME.jar"
+[ -f "$DEPS/$NAME-assets.jar" ] || fail "缺少 assets jar：$DEPS/$NAME-assets.jar"
+unzip -l "$DEPS/$NAME-assets.jar" | grep -q "assets/index.html" || fail "assets jar 没带 assets/index.html"
 
-MAIN_CLASS=$(unzip -p "$LIB/$NAME.jar" META-INF/MANIFEST.MF | grep -i '^Main-Class:' | tr -d '\r' | sed 's/Main-Class: //')
+MAIN_CLASS=$(unzip -p "$DEPS/$NAME.jar" META-INF/MANIFEST.MF | grep -i '^Main-Class:' | tr -d '\r' | sed 's/Main-Class: //')
 [ -n "$MAIN_CLASS" ] || fail "app jar 没有 Main-Class"
 grep -q "main_class = \"$MAIN_CLASS\"" "$DEMO/krema.toml" || fail "app jar 的 Main-Class ($MAIN_CLASS) 与 krema.toml 不一致"
 
 [ -x "$OUT/runtime/bin/java" ] || fail "运行时镜像里没有可执行 java"
 
-BUNDLE_APP="$OUT/bundle/$NAME"
+# 启动器用的是这个 profile：主类漏了，窗口断言要等到 app 起来才发现，先在这里挡。
+grep -qx "app.mainclass=$MAIN_CLASS" "$DEPS/$NAME.cfg" 2>/dev/null ||
+    fail "app-image profile 的 app.mainclass 与 app jar 的 Main-Class（$MAIN_CLASS）不一致：$DEPS/$NAME.cfg"
+
+BUNDLE_APP="$OUT/app/$NAME"
 [ -d "$BUNDLE_APP" ] || fail "app-image 目录不存在：$BUNDLE_APP"
 LAUNCHER="$BUNDLE_APP/bin/$NAME"
 [ -x "$LAUNCHER" ] || fail "app-image 启动器不可执行：$LAUNCHER"
