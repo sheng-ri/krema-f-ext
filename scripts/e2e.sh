@@ -70,7 +70,8 @@ echo "== kremaBundlePlatform（首次，构建整张图）=="
 "$DEMO/gradlew" -p "$DEMO" kremaBundlePlatform --configuration-cache --no-daemon --project-cache-dir "$CACHE_DIR"
 
 # --- 断言产物 ---
-LIB="$OUT/lib"
+# kremaBundle 收拢的 jar 目录（BUNDLE_DEPS 的落点），jpackage 再由它铺进 app-image/lib/app。
+LIB="$OUT/deps"
 [ -f "$LIB/$NAME.jar" ] || fail "缺少 app jar：$LIB/$NAME.jar"
 [ -f "$LIB/$NAME-assets.jar" ] || fail "缺少 assets jar：$LIB/$NAME-assets.jar"
 unzip -l "$LIB/$NAME-assets.jar" | grep -q "assets/index.html" || fail "assets jar 没带 assets/index.html"
