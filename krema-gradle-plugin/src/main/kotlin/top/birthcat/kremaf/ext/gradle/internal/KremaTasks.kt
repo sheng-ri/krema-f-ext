@@ -6,6 +6,7 @@ package top.birthcat.kremaf.ext.gradle.internal
 
 import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.JavaExec
 import org.gradle.api.tasks.TaskProvider
 import org.gradle.jvm.tasks.Jar
@@ -33,6 +34,7 @@ import top.birthcat.kremaf.ext.gradle.internal.config.DEV_URL_ENV
 import top.birthcat.kremaf.ext.gradle.internal.config.JDEPS_VERBOSE_REPORT_NAME
 import top.birthcat.kremaf.ext.gradle.internal.config.KREMA_CONFIG_FILE_NAME
 import top.birthcat.kremaf.ext.gradle.internal.config.KremaConfigValueSource
+import top.birthcat.kremaf.ext.gradle.internal.config.LIB_DIR_NAME
 import top.birthcat.kremaf.ext.gradle.internal.config.PROCESS_CLEANUP_SERVICE
 import top.birthcat.kremaf.ext.gradle.internal.config.RUNTIME_DIR_NAME
 import top.birthcat.kremaf.ext.gradle.internal.config.ResolvedKremaConfig
@@ -104,6 +106,7 @@ internal fun Project.registerKremaTasks() {
     val appClasspath = kremaApplicationClasspath()
     // jar 必须顶层注册：register 闭包执行时 task 集已冻结。
     val classesTask = tasks.named("classes")
+    val libDir = resolvedConfig.outputDir.map { it.dir(LIB_DIR_NAME) }
     val appJarTask =
         tasks.register<Jar>(KremaTaskNames.APP_JAR) {
             dependsOn(classesTask)
@@ -111,6 +114,7 @@ internal fun Project.registerKremaTasks() {
             appClasspath.resourcesDir?.let { from(it) }
             manifest { attributes(mapOf("Main-Class" to resolvedConfig.mainClass.get())) }
             archiveFileName.set(resolvedConfig.appName.map { appJarName(it) })
+            destinationDirectory.set(libDir)
         }
 
     val assetsJarTask =
@@ -120,12 +124,22 @@ internal fun Project.registerKremaTasks() {
                 into(ASSETS_DIR)
             }
             archiveFileName.set(resolvedConfig.appName.map { assetsJarName(it) })
+            destinationDirectory.set(libDir)
+        }
+
+    // 依赖 jar 与自家 jar 同落 lib/：bundle 只认这一个目录，不必再另抄一份 deps。
+    // 用 Copy 而非 Sync：Sync 会删掉 lib/ 里不来自它这一源的 jar，把 app jar 一起清掉。
+    val libTask =
+        tasks.register<Copy>(KremaTaskNames.LIB) {
+            dependsOn(appJarTask, assetsJarTask)
+            from(appClasspath.runtimeClasspath)
+            into(libDir)
         }
 
     tasks.register(KremaTaskNames.BUILD) {
         group = KremaTaskNames.GROUP
-        description = "Aggregate the application jar and the assets jar"
-        dependsOn(appJarTask, assetsJarTask)
+        description = "Aggregate the app jar, the assets jar and the runtime dependency jars into lib/"
+        dependsOn(libTask)
     }
 
     val runtimeTask =
@@ -148,12 +162,8 @@ internal fun Project.registerKremaTasks() {
 
     val bundleTask =
         tasks.register<KremaBundleTask>(KremaTaskNames.BUNDLE) {
-            dependsOn(appJarTask, assetsJarTask, runtimeTask)
-            inputJarDeps.from(
-                appJarTask.map { it.archiveFile },
-                assetsJarTask.map { it.archiveFile },
-                appClasspath.runtimeClasspath,
-            )
+            dependsOn(libTask, runtimeTask)
+            inputJarDeps.from(libDir)
             resolvedConfig.configureBundle(this, runtimeTask)
         }
 

@@ -70,8 +70,8 @@ echo "== kremaBundlePlatform（首次，构建整张图）=="
 "$DEMO/gradlew" -p "$DEMO" kremaBundlePlatform --configuration-cache --no-daemon --project-cache-dir "$CACHE_DIR"
 
 # --- 断言产物 ---
-# kremaBundle 收拢的 jar 目录（BUNDLE_DEPS 的落点），jpackage 再由它铺进 app-image。
-LIB="$OUT/deps"
+# app jar、assets jar 与依赖 jar 同落 lib；kremaBundle 直接拿它铺进 app-image。
+LIB="$OUT/lib"
 [ -f "$LIB/$NAME.jar" ] || fail "缺少 app jar：$LIB/$NAME.jar"
 [ -f "$LIB/$NAME-assets.jar" ] || fail "缺少 assets jar：$LIB/$NAME-assets.jar"
 # 先验前端产物本身：kremaAssetsJar 只打包 dist，dist 空着不报错，只会产出空包，
@@ -94,6 +94,8 @@ BUNDLE_APP="$OUT/app/$NAME"
 [ -d "$BUNDLE_APP" ] || fail "app-image 目录不存在：$BUNDLE_APP"
 LAUNCHER="$BUNDLE_APP/bin/$NAME"
 [ -x "$LAUNCHER" ] || fail "app-image 启动器不可执行：$LAUNCHER"
+# 依赖 jar 必须跟 app jar 一起进 app-image：lib/app 下缺依赖，进程起窗口后立刻崩。
+[ -f "$BUNDLE_APP/lib/app/krema-core-0.3.2.jar" ] || fail "app-image 没带运行期依赖 jar：$BUNDLE_APP/lib/app"
 
 # 启动器读的是 jpackage 写的 lib/app/<name>.cfg，不是 jar 清单：两处主类不一致时窗口要等
 # app 起来才炸，报错还只指向 ClassNotFoundException。这里先按 jar 自报的主类核对。
@@ -109,10 +111,10 @@ CFG_MAIN=$(grep '^app.mainclass=' "$CFG" | cut -d= -f2-)
 # --- kremaDevRun：dev 路径进程能起、classpath 接对 ---
 # dev run 走 KREMA_DEV_URL + vite，classpath 上无 assets jar，只验初始化行。
 echo "== kremaDevRun（进程启动验收）=="
-set +e
-timeout 20 "$DEMO/gradlew" -p "$DEMO" kremaDevRun --configuration-cache --console=plain --project-cache-dir "$CACHE_DIR" 2>&1 | tee /tmp/krema-devrun.log
-set -e
+# 长驻 task 只能被 timeout 收掉，gradle 必然非零退出，故只看日志不看退出码。
+timeout 20 "$DEMO/gradlew" -p "$DEMO" kremaDevRun --configuration-cache --console=plain --project-cache-dir "$CACHE_DIR" > /tmp/krema-devrun.log 2>&1 || true
 grep -q 'Creating window' /tmp/krema-devrun.log || fail "kremaDevRun 未打印 Krema 初始化行：进程没起来或 classpath 接错"
+grep -qE 'Exception in thread|Failed to create webview' /tmp/krema-devrun.log && fail "kremaDevRun 起窗口后崩了：/tmp/krema-devrun.log"
 
 # timeout 只杀了 gradle 客户端，daemon 里 kremaDevRun 仍在跑，app 进程与「Krema Demo」窗口都留着。
 # 不清掉会连带坏三处：残留窗口让下面的窗口断言秒过、app 占着 project cache 锁把 kremaBundleRun 堵在等待、
@@ -141,6 +143,8 @@ for _ in $(seq 1 300); do
   sleep 0.5
 done
 [ "$WINDOW_SEEN" = 1 ] || fail "没等到窗口「Krema Demo」：$RUN_LOG"
+# 窗口断言会先于进程退出命中，崩没崩只能看日志。
+grep -q 'Exception in thread' "$RUN_LOG" && fail "app 起窗口后崩了：$RUN_LOG"
 
 grep -q '\[Krema\]' "$RUN_LOG" || fail "kremaBundleRun 的 console 里没有应用输出：$RUN_LOG"
 

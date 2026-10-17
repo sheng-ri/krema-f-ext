@@ -8,7 +8,6 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.file.FileSystemOperations
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
@@ -24,7 +23,7 @@ import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.api.BundleSettings
 import top.birthcat.kremaf.ext.gradle.api.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.api.Platform
-import top.birthcat.kremaf.ext.gradle.internal.config.BUNDLE_DEPS
+import top.birthcat.kremaf.ext.gradle.internal.config.LIB_DIR_NAME
 import top.birthcat.kremaf.ext.gradle.internal.tool.JpackageTool
 import java.nio.file.Path
 import javax.inject.Inject
@@ -42,7 +41,7 @@ abstract class KremaBundleTask : DefaultTask() {
         description = "Build a runnable, uncompressed app-image (build/krema/app) with the jlink-trimmed runtime"
     }
 
-    /** Root of the Krema output tree; the dependency directory lives here. */
+    /** Root of the Krema output tree; the lib directory with all jars lives here. */
     @get:Internal
     abstract val buildDir: DirectoryProperty
 
@@ -59,7 +58,7 @@ abstract class KremaBundleTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val inputRuntimeImageDir: DirectoryProperty
 
-    /** Application, assets and runtime dependency jars copied into the dependency directory. */
+    /** Application, assets and runtime dependency jars; handed to jpackage as --input. */
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val inputJarDeps: ConfigurableFileCollection
@@ -76,32 +75,22 @@ abstract class KremaBundleTask : DefaultTask() {
     @get:Inject
     abstract val execOperations: ExecOperations
 
-    /** Injected file system operations. */
-    @get:Inject
-    abstract val fileSystemOperations: FileSystemOperations
-
     /** Builds the app-image from the collected jars and the trimmed runtime. */
     @Throws(GradleException::class)
     @TaskAction
     fun bundle() {
         val platform = hostPlatform.get()
         val settings = bundleSettings.get()
-        val bundleLibDir =
-            buildDir
-                .map {
-                    it.dir(BUNDLE_DEPS)
-                }.apply {
-                    get().asFile.mkdirs()
-                }
-        fileSystemOperations.sync {
-            from(inputJarDeps)
-            into(bundleLibDir)
-        }
         JpackageTool(execOperations).appImage(
             binDir = Path.of(jdkBinDir.get()),
             platform = platform,
             settings = settings,
-            appLibDir = bundleLibDir.get().asFile.toPath(),
+            appLibDir =
+                buildDir
+                    .get()
+                    .dir(LIB_DIR_NAME)
+                    .asFile
+                    .toPath(),
             runtimeImageDir = inputRuntimeImageDir.get().asFile.toPath(),
             dest = outputBundleDir.get().asFile.toPath(),
         )

@@ -10,8 +10,8 @@ internal const val ASSETS_DIR = "assets"
 /** 产物根下的 app-image 目录名。 */
 internal const val BUNDLE_DIR_NAME = "app"
 
-/** 运行期依赖 jar 的目录名。 */
-internal const val BUNDLE_DEPS = "deps"
+/** 应用与依赖 jar 的聚合目录名；bundle 直接拿这一份去 jpackage。 */
+internal const val LIB_DIR_NAME = "lib"
 
 /** 产物根目录的默认名。 */
 internal const val DEFAULT_OUTPUT_DIR_NAME = "krema"

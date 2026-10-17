@@ -16,7 +16,7 @@ object KremaTaskNames {
     /** Generates the project scaffold. */
     const val INIT = "kremaInit"
 
-    /** Aggregates the application jar and the assets jar. */
+    /** Aggregates the app jar, the assets jar and the runtime dependency jars into lib/. */
     const val BUILD = "kremaBuild"
 
     /** Application jar: classes, resources and the Main-Class attribute. */
@@ -24,6 +24,9 @@ object KremaTaskNames {
 
     /** Frontend assets jar; its contents live under the assets/ directory. */
     const val ASSETS_JAR = "kremaAssetsJar"
+
+    /** Copies the runtime dependency jars next to the app and assets jars in lib/. */
+    const val LIB = "kremaLib"
 
     /** Uncompressed, runnable app-image; the base for every platform package. */
     const val BUNDLE = "kremaBundle"
