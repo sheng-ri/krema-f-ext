@@ -20,12 +20,17 @@ class NoteCommands {
 
     /** 读后端状态。前端 `krema.invoke('get')` 拿到这里的返回值。 */
     @KremaCommand("get")
-    fun get(): String = note
+    fun get(): String {
+        println("get: $note")
+        return note
+    }
+
 
     /** 改后端状态并回写新值，前端拿返回值确认落库后的内容。 */
     @KremaCommand("update")
     fun update(text: String): String {
         note = text
+        println("update: $text")
         return note
     }
 }
