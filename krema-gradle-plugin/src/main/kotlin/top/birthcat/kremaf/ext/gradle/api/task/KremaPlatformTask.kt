@@ -13,6 +13,7 @@ import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Nested
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
@@ -59,6 +60,7 @@ abstract class KremaPlatformTask : DefaultTask() {
      * empty unless this task produces an exe or msi.
      */
     @get:Nested
+    @get:Optional
     abstract val windowsOptions: Property<WindowsInstallerOptions>
 
     /** app-image produced by kremaBundle, used as the input for this format; compared by content. */
