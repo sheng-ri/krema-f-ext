@@ -74,7 +74,13 @@ echo "== kremaBundlePlatform（首次，构建整张图）=="
 LIB="$OUT/deps"
 [ -f "$LIB/$NAME.jar" ] || fail "缺少 app jar：$LIB/$NAME.jar"
 [ -f "$LIB/$NAME-assets.jar" ] || fail "缺少 assets jar：$LIB/$NAME-assets.jar"
-unzip -l "$LIB/$NAME-assets.jar" | grep -q "assets/index.html" || fail "assets jar 没带 assets/index.html"
+# 先验前端产物本身：kremaAssetsJar 只打包 dist，dist 空着不报错，只会产出空包，
+# 到这里才炸「没带 index.html」，把 vite 的失败（如 pnpm 拦了 esbuild 的 postinstall）藏掉。
+# 路径按 krema.toml 的 out_dir 拼，与插件里 frontendOutDir 的解析规则一致。
+FRONT_DIST="$DEMO/$(sed -n 's/^out_dir *= *"\(.*\)"/\1/p' "$DEMO/krema.toml")"
+[ -f "$FRONT_DIST/index.html" ] || fail "前端产物缺 index.html：$FRONT_DIST（前端构建没成功）"
+# unzip -l 的列表首列带前导空格、还会混进目录条目；读内容判定，免得条目格式变了断言跟着飘。
+unzip -p "$LIB/$NAME-assets.jar" assets/index.html > /dev/null 2>&1 || fail "assets jar 没带 assets/index.html"
 
 MAIN_CLASS=$(unzip -p "$LIB/$NAME.jar" META-INF/MANIFEST.MF | grep -i '^Main-Class:' | tr -d '\r' | sed 's/Main-Class: //')
 [ -n "$MAIN_CLASS" ] || fail "app jar 没有 Main-Class"
