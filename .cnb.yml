@@ -63,7 +63,6 @@ $:
       <<: *pipeline
       stages:
         - *verify
-        - *upload-shot
 
   # 应急手动发布：常规发布走 tag，此按钮仅作兜底。
   web_trigger_release:
