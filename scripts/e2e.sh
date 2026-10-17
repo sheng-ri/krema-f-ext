@@ -70,14 +70,16 @@ echo "== kremaBundlePlatform（首次，构建整张图）=="
 "$DEMO/gradlew" -p "$DEMO" kremaBundlePlatform --configuration-cache --no-daemon --project-cache-dir "$CACHE_DIR"
 
 # --- 断言产物 ---
-# kremaBundle 收拢的 jar 目录（BUNDLE_DEPS 的落点），jpackage 再由它铺进 app-image/lib/app。
+# kremaBundle 收拢的 jar 目录（BUNDLE_DEPS 的落点），jpackage 再由它铺进 app-image。
 LIB="$OUT/deps"
 [ -f "$LIB/$NAME.jar" ] || fail "缺少 app jar：$LIB/$NAME.jar"
 [ -f "$LIB/$NAME-assets.jar" ] || fail "缺少 assets jar：$LIB/$NAME-assets.jar"
 # 先验前端产物本身：kremaAssetsJar 只打包 dist，dist 空着不报错，只会产出空包，
 # 到这里才炸「没带 index.html」，把 vite 的失败（如 pnpm 拦了 esbuild 的 postinstall）藏掉。
-# 路径按 krema.toml 的 out_dir 拼，与插件里 frontendOutDir 的解析规则一致。
-FRONT_DIST="$DEMO/$(sed -n 's/^out_dir *= *"\(.*\)"/\1/p' "$DEMO/krema.toml")"
+# 路径按 krema.toml 的 out_dir 拼：out_dir 相对项目根（krema.frontendOutDir 同为 layout.projectDirectory），
+# frontend_dir 只决定命令在哪个目录跑，不参与拼接——拼成 front/dist 会永远找不到文件。
+FRONT_OUT=$(sed -n 's/^out_dir *= *"\(.*\)"/\1/p' "$DEMO/krema.toml")
+FRONT_DIST="$DEMO/${FRONT_OUT:-dist}"
 [ -f "$FRONT_DIST/index.html" ] || fail "前端产物缺 index.html：$FRONT_DIST（前端构建没成功）"
 # unzip -l 的列表首列带前导空格、还会混进目录条目；读内容判定，免得条目格式变了断言跟着飘。
 unzip -p "$LIB/$NAME-assets.jar" assets/index.html > /dev/null 2>&1 || fail "assets jar 没带 assets/index.html"
