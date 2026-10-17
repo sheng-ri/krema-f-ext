@@ -13,7 +13,6 @@ import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
@@ -29,7 +28,7 @@ import javax.inject.Inject
  *
  * 模块清单有两条路：默认由 jdeps 按 [classpathFiles] 现算（推导结果**不**配成输入 —— 它完全由
  * classpath 决定，多声明一份只会算出两份互相矛盾的模块名）；`krema { runtime { modules } }` 非空时
- * [modules] 取代推导，作为覆盖值的唯一落点。
+ * [inputModules] 取代推导，作为覆盖值的唯一落点。
  *
  * 工具路径取自 JDK toolchain 而非 PATH：用户用别的 JDK 构建时，PATH 上的 jlink 可能根本不存在。
  */
@@ -39,10 +38,6 @@ abstract class KremaRuntimeImageTask : DefaultTask() {
         group = KremaTaskNames.GROUP
         description = "Derive modules via jdeps and trim a minimal runtime image with jlink (build/krema/runtime)"
     }
-
-    /** 产物根目录仅作 [runtimeImageDir] 的基准，本身不是本 task 的产物。 */
-    @get:Internal
-    abstract val outputDir: DirectoryProperty
 
     /** 应用运行所需的 classpath，模块推导的输入。声明成 `@Classpath` 才能按内容而非路径判变更。 */
     @get:Classpath
@@ -55,11 +50,11 @@ abstract class KremaRuntimeImageTask : DefaultTask() {
      * `modules.isEmpty()` 加 `onlyIf` 会让显式指定时 jlink 永不执行，正好把方向搞反。
      */
     @get:Input
-    abstract val modules: SetProperty<String>
+    abstract val inputModules: SetProperty<String>
 
     /** 运行时镜像目录，约定为 `outputDir/runtime`（即 `build/krema/runtime`）。 */
     @get:OutputDirectory
-    abstract val runtimeImageDir: DirectoryProperty
+    abstract val outputRuntimeImageDir: DirectoryProperty
 
     /** jdeps 与 jlink 所在的可执行文件目录，取自 JDK toolchain。进缓存键：换 JDK 即视为新镜像。 */
     @get:Input
@@ -82,32 +77,28 @@ abstract class KremaRuntimeImageTask : DefaultTask() {
     abstract val execOperations: ExecOperations
 
     @TaskAction
-    @Throws(GradleException::class)
     fun createRuntimeImage() {
         val binDir = Path.of(jdkBinDir.get())
-        val explicit = modules.get()
+        val explicit = inputModules.get()
         // 排序后交给 jlink：SetProperty 的指纹对迭代顺序敏感，用户从 Map 派生集合时顺序可能变，
         // 不排序会让同一份清单偶发地重跑 jlink。
-        val moduleList = if (explicit.isEmpty()) jdepsModules(binDir) else explicit.sorted().joinToString(",")
-        JlinkTool(execOperations).carve(binDir, moduleList, runtimeImageDir.get().asFile.toPath())
+        val moduleList = if (explicit.isEmpty()) jdepsModules() else explicit.sorted().joinToString(",")
+        JlinkTool(execOperations).carve(binDir, moduleList, outputRuntimeImageDir.get().asFile.toPath())
     }
 
     /** 取应用 classpath 依赖到的 JDK 模块，逗号分隔，形如 `java.base,java.desktop`。 */
-    @Throws(GradleException::class)
-    private fun jdepsModules(binDir: Path): String {
-        val out = jdepsRunner().run(verbose = false)
+    private fun jdepsModules(): String {
+        val out =
+            JdepsRunner(
+                execOperations = execOperations,
+                binDir = Path.of(jdkBinDir.get()),
+                multiRelease = multiRelease.get(),
+                classpathFiles = classpathFiles,
+            ).run(verbose = false)
         val modules = out.firstLine()
         if (out.exitValue != 0 || modules.isEmpty()) {
-            throw GradleException("推导运行时模块失败：\n${out.text}")
+            throw GradleException("Failed to derive runtime modules:\n${out.text}")
         }
         return modules
     }
-
-    private fun jdepsRunner(): JdepsRunner =
-        JdepsRunner(
-            execOperations = execOperations,
-            binDir = Path.of(jdkBinDir.get()),
-            multiRelease = multiRelease.get(),
-            classpathFiles = classpathFiles,
-        )
 }

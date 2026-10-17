@@ -18,7 +18,7 @@ import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.tool.Ed25519Signer
 
 /** 用私钥给产物签名。 */
-@DisableCachingByDefault(because = "签名依赖私钥，且输入含密钥本身")
+@DisableCachingByDefault(because = "signing depends on the private key, and the input contains the key itself")
 abstract class KremaSignerSignTask : DefaultTask() {
     init {
         group = KremaTaskNames.GROUP

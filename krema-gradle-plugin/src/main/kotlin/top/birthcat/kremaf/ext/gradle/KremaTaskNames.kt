@@ -44,23 +44,4 @@ object KremaTaskNames {
     const val JDEPS_MODULES = "jdepsModules"
 
     const val JDEPS_MODULES_VERBOSE = "jdepsModulesVerbose"
-
-    /** 全部静态 task 名，声明顺序即 `gradlew tasks` 里的出现顺序。按需注册的 `kremaPlatform<格式>` 不在此列。 */
-    val ALL =
-        listOf(
-            INIT,
-            BUILD,
-            APP_JAR,
-            ASSETS_JAR,
-            FRONTEND_BUILD,
-            RUNTIME_IMAGE,
-            JDEPS_MODULES,
-            JDEPS_MODULES_VERBOSE,
-            BUNDLE,
-            BUNDLE_PLATFORM,
-            DEV_RUN,
-            BUNDLE_RUN,
-            SIGNER_GENERATE,
-            SIGNER_SIGN,
-        )
 }

@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle
 
+import top.birthcat.kremaf.ext.gradle.config.ASSETS_DIR
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -40,12 +41,12 @@ class TemplateGenerator {
         |        if (System.getProperty("os.name").lowercase().contains("win")) {
         |            NativeLibraryLoader.load("libwinpthread-1")
         |        }
-        |        // 开发期读 KREMA_DEV_URL 指到使用方自己的前端 dev server；没就用内建默认。
+        |        // In dev, KREMA_DEV_URL points at the caller's own frontend dev server; otherwise use the built-in default.
         |        String devUrl = System.getenv("KREMA_DEV_URL");
         |        Krema.app()
         |            .title("${settings.appName}")
         |            .devUrl(devUrl == null ? "http://localhost:5173" : devUrl)
-        |            .prodAssets("/assets")
+        |            .prodAssets("$ASSETS_DIR")
         |            .run();
         |    }
         |}
@@ -61,7 +62,7 @@ class TemplateGenerator {
         |
         |[build]
         |frontend_command = "npm run build"
-        |out_dir = "dist"
+        |frontend_out_dir = "dist"
         |main_class = "${settings.javaPackage}.Main"
         |dev_url = "http://localhost:5173"
         |

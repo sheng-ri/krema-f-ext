@@ -4,6 +4,7 @@
  */
 package top.birthcat.kremaf.ext.gradle.config
 
+import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -40,6 +41,8 @@ abstract class KremaExtension {
      * 只在这一处给值，应用代码要不要读那个环境变量归它自己。
      */
     abstract val devUrl: Property<String>
+
+    abstract val frontendOutDir: DirectoryProperty
 
     /** 前端输入，由插件在 `apply` 时接上 `frontend { }` 块。 */
     @Internal
@@ -123,7 +126,7 @@ abstract class KremaBundlingExtension {
      * 各平台的图标：`macIcon` 吃 icns、`winIcon` 吃 ico、`linuxIcon` 吃 png。
      *
      * 未配或文件不存在就跳过 `--icon`，不报错。三种都未配时退到 `krema.toml` 的 `[bundle].icon`
-     * 按宿主平台后缀兜底（见 [resolveBundleIcon]）。
+     * 按宿主平台后缀兜底（见 [top.birthcat.kremaf.ext.gradle.domain.resolveBundleIcon]）。
      */
     abstract val macIcon: RegularFileProperty
 
@@ -147,8 +150,7 @@ abstract class KremaBundlingExtension {
      * 按属性取，不按枚举自身的 [BundleFormat.platform] 过滤：属性名已经声明了归属，
      * 再过一遍会让「把 `DMG` 写进 `windowsFormats`」这种笔误被静默吞掉而不是被发现。
      */
-    fun formatsForHost(platform: Platform = PlatformDetector.detect()): Set<BundleFormat> =
-        selectHostFormats(platform, macosFormats.get(), windowsFormats.get(), linuxFormats.get())
+    fun formatsForHost() = selectHostFormats(PlatformDetector.detect(), macosFormats.get(), windowsFormats.get(), linuxFormats.get())
 }
 
 /**
@@ -159,10 +161,9 @@ fun selectHostFormats(
     macos: Set<BundleFormat>,
     windows: Set<BundleFormat>,
     linux: Set<BundleFormat>,
-): Set<BundleFormat> =
-    when (platform) {
-        Platform.DARWIN -> macos
-        Platform.WINDOWS -> windows
-        Platform.LINUX -> linux
-        Platform.UNKNOWN -> emptySet()
-    }
+) = when (platform) {
+    Platform.DARWIN -> macos
+    Platform.WINDOWS -> windows
+    Platform.LINUX -> linux
+    Platform.UNKNOWN -> emptySet<BundleFormat>()
+}

@@ -46,11 +46,11 @@ abstract class KremaConfigValueSource :
         val toml = Path.of(parameters.configFilePath.get())
         return when {
             Files.exists(toml) -> KremaConfigLoader().loadOrDefault(toml)
-            parameters.configFileSetExplicitly.get() -> error("krema.configFile 指向的 krema.toml 不存在：$toml")
+            parameters.configFileSetExplicitly.get() -> error("krema.configFile points to a missing krema.toml: $toml")
             else -> KremaConfig()
         }
     }
 
     /** 缓存失效信息里显示这个名字，比类名可读。 */
-    override fun getDisplayName(): String = "krema.toml"
+    override fun getDisplayName() = "krema.toml"
 }

@@ -9,7 +9,7 @@ import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
 import java.nio.file.Path
 
-fun jdepsModulesFrom(text: String): String =
+fun jdepsModulesFrom(text: String) =
     text
         .lineSequence()
         .map { it.trim() }
@@ -23,7 +23,7 @@ internal class JdepsOutput(
     val bytes: ByteArray,
 ) {
     /** jdeps 成功时把模块清单打在第一行，取第一行非空。 */
-    fun firstLine(): String = jdepsModulesFrom(text)
+    fun firstLine() = jdepsModulesFrom(text)
 }
 
 /** 调 jdeps 推导模块清单供运行时镜像与检视 task 复用；[run] 只执行捕获、绝不抛，失败语义交调用方。 */

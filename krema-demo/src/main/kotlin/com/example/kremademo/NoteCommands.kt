@@ -16,7 +16,7 @@ import build.krema.core.KremaCommand
  * 字段就是那份状态本身，不需要再为「存在哪」写一层单例。
  */
 class NoteCommands {
-    private var note: String = "还没写过内容"
+    private var note = "还没写过内容"
 
     /** 读后端状态。前端 `krema.invoke('get')` 拿到这里的返回值。 */
     @KremaCommand("get")

@@ -16,7 +16,6 @@ class JlinkTool(
     /**
      * 目标目录先清空再裁：jlink 见到已存在的目录就报「目录已存在」，而该目录是本 task 声明的产物，重建前清空安全。
      */
-    @Throws(GradleException::class)
     fun carve(
         binDir: Path,
         modules: String,
@@ -32,6 +31,6 @@ class JlinkTool(
                 outputDir.toAbsolutePath().toString(),
             )
         val result = execOperations.capture(command)
-        if (result.exitValue != 0) throw GradleException("裁剪运行时镜像失败（模块：$modules）：\n${result.output}")
+        if (result.exitValue != 0) throw GradleException("Failed to build the runtime image (modules: $modules): \n${result.output}")
     }
 }

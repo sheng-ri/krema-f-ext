@@ -4,6 +4,8 @@
  */
 package top.birthcat.kremaf.ext.gradle.domain
 
+import top.birthcat.kremaf.ext.gradle.config.kremaPlatformTaskName
+
 /**
  * 平台包格式，即本平台原生的可安装件。
  *
@@ -49,15 +51,5 @@ enum class BundleFormat(
         APP_IMAGE_TOOL,
     }
 
-    /** 图标文件后缀，按平台推断；`krema.toml` 的 `[bundle].icon` 按此后缀兜底匹配。 */
-    fun iconSuffix(): String = platform.iconSuffix()
+    internal val kremaPlatformTaskName get() = kremaPlatformTaskName(name)
 }
-
-/**
- * 把格式枚举名翻成 `kremaPlatform<格式>` task 名里的形状：`APP_IMAGE` → `kremaPlatformAppImage`。
- *
- * 按枚举名（带 `_` 分隔）推大驼峰，而不是 id：`appimage` 一个词拼不出「AppImage」，
- * 但枚举名 `APP_IMAGE` 分段后能拼出，task 名才对人可读。产物路径仍用 [BundleFormat.id]，与 task 名解耦。
- */
-fun kremaPlatformTaskName(format: BundleFormat): String =
-    "kremaPlatform" + format.name.split('_').joinToString("") { it.lowercase().replaceFirstChar(Char::uppercase) }

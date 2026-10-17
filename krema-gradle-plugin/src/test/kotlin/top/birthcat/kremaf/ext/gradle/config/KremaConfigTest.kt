@@ -23,7 +23,7 @@ class KremaConfigTest {
         assertNull(config.packageName)
         assertNull(config.version)
         assertNull(config.identifier)
-        assertNull(config.build.outDir)
+        assertNull(config.build.frontendOutDir)
         assertNull(config.build.mainClass)
         assertNull(config.build.devUrl)
         assertNull(config.frontend.buildCommand)
@@ -91,22 +91,5 @@ class KremaConfigTest {
             }
 
         assertTrue(error.message!!.contains("package.name"), "报错应指到配置项：${error.message}")
-    }
-
-    @Test
-    @DisplayName("主类缺失时解析抛错")
-    fun mainClassThrowsWhenMissing() {
-        assertThrows(IllegalStateException::class.java) {
-            resolveMainClass(KremaConfig(), null)
-        }
-    }
-
-    @Test
-    @DisplayName("主类覆盖值压过 toml")
-    fun mainClassOverrideWins() {
-        val config = KremaConfig(build = Build(mainClass = "com.example.Toml"))
-
-        assertEquals("com.example.Override", resolveMainClass(config, "com.example.Override"))
-        assertEquals("com.example.Toml", resolveMainClass(config, "  "))
     }
 }

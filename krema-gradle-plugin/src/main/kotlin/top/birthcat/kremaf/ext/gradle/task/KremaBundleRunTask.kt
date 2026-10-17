@@ -8,15 +8,19 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.services.ServiceReference
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
+import org.gradle.kotlin.dsl.provideDelegate
 import org.gradle.work.DisableCachingByDefault
 import top.birthcat.kremaf.ext.gradle.KremaProcessCleanupService
 import top.birthcat.kremaf.ext.gradle.KremaTaskNames
-import top.birthcat.kremaf.ext.gradle.config.BundleSettings
-import top.birthcat.kremaf.ext.gradle.config.PlatformBundler
+import top.birthcat.kremaf.ext.gradle.config.PROCESS_CLEANUP_SERVICE
+import top.birthcat.kremaf.ext.gradle.domain.BundleSettings
+import top.birthcat.kremaf.ext.gradle.tool.PlatformBundleLauncher
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 /**
  * 起并阻塞前台跑 bundle 里的应用进程。
@@ -24,7 +28,7 @@ import java.util.concurrent.TimeUnit
  * 进程登记到 [KremaProcessCleanupService]，用户中断（Ctrl-C）时由构建收尾统一回收，不留孤儿进程。
  * run task 不产出文件，故不声明输出目录。
  */
-@DisableCachingByDefault(because = "起长驻进程，副作用是进程而非产物")
+@DisableCachingByDefault(because = "starts a long-lived process; the side effect is a process, not an artifact")
 abstract class KremaBundleRunTask : DefaultTask() {
     init {
         group = KremaTaskNames.GROUP
@@ -44,18 +48,23 @@ abstract class KremaBundleRunTask : DefaultTask() {
     abstract val bundleSettings: Property<BundleSettings>
 
     /** 进程回收服务，由注册期注入。 */
-    @get:Internal
-    abstract val cleanupService: Property<KremaProcessCleanupService>
+    @get:ServiceReference(PROCESS_CLEANUP_SERVICE)
+    abstract val cleanupServiceProp: Property<KremaProcessCleanupService>
 
     @TaskAction
-    @Throws(GradleException::class)
     fun run() {
         val settings = bundleSettings.get()
-        val bundler = PlatformBundler(target.get())
-        val cleanup = cleanupService.get()
+        val appImageDir =
+            bundleDir
+                .get()
+                .asFile
+                .toPath()
+                .resolve(settings.appName)
+        val bundler = PlatformBundleLauncher(appImageDir, target.get())
 
         val app = bundler.launch(settings, emptyMap())
-        cleanup.register(app)
+        val cleanupService = cleanupServiceProp.get()
+        cleanupService.register(app)
         // 轮询式等待：java 的 waitFor() 默认无视线程中断会卡死任务线程，导致构建取消时收不到收尾信号。
         // 一旦被中断（Ctrl-C）就退出循环，在 finally 里直接回收进程树，不依赖 daemon 的 close 时机。
         var interrupted = false
@@ -74,13 +83,13 @@ abstract class KremaBundleRunTask : DefaultTask() {
                 }
             }
         } finally {
-            cleanup.killAll()
+            cleanupService.killAll()
         }
         // 应用自己退掉（而非被中断或回收）时，退出码非零就是启动失败：缺 jlink 模块、加载不了
         // libwebview 这类都在窗口创建后几秒内崩掉。不判退出码的话 task 照样报成功，崩溃只留在日志里。
         if (!interrupted) {
             val code = app.exitValue()
-            if (code != 0) throw GradleException("应用进程以退出码 $code 结束，详见上方启动器输出")
+            if (code != 0) throw GradleException("Application process exited with code $code; see the launcher output above")
         }
     }
 }

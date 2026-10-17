@@ -48,7 +48,7 @@ class Ed25519Signer {
         write(path, "-----BEGIN $label-----\n$body\n-----END $label-----\n")
     }
 
-    private fun readPem(path: Path): ByteArray =
+    private fun readPem(path: Path) =
         Files
             .readString(path)
             .lineSequence()

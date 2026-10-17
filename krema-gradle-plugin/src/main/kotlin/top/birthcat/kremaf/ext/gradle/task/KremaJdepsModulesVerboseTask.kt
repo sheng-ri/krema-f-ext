@@ -29,11 +29,12 @@ import javax.inject.Inject
  * 报告文件声明成 [Internal] 而非 `@OutputFile`：它落在 `build/krema/` 下，声明成输出就是第二个
  * 声明该目录的 task。代价是 Gradle 不再替我们建父目录，故写之前自己建。
  */
-@DisableCachingByDefault(because = "诊断报告：命中缓存不重跑就什么都看不到")
+@DisableCachingByDefault(because = "diagnostic report: a cache hit would skip the run and hide everything")
 abstract class KremaJdepsModulesVerboseTask : DefaultTask() {
     init {
         group = KremaTaskNames.GROUP
-        description = "Print per-package jdeps -v dependency details and write a report to build/krema/jdeps-verbose.txt"
+        description =
+            "Print per-package jdeps -v dependency details and write a report to build/krema/jdeps-verbose.txt"
     }
 
     /** 应用运行所需的 classpath，模块推导的输入。 */
@@ -58,8 +59,12 @@ abstract class KremaJdepsModulesVerboseTask : DefaultTask() {
     @TaskAction
     fun printVerbose() {
         val out =
-            JdepsRunner(execOperations, Path.of(jdkBinDir.get()), multiRelease.get(), classpathFiles)
-                .run(verbose = true)
+            JdepsRunner(
+                execOperations,
+                Path.of(jdkBinDir.get()),
+                multiRelease.get(),
+                classpathFiles,
+            ).run(verbose = true)
         // 原样落盘：jdeps 走平台默认字符集，经字符串中转会按 Gradle 的默认编码把非 UTF-8 的报告改写坏。
         val target = reportFile.get().asFile.toPath()
         target.parent?.let(Files::createDirectories)
@@ -67,7 +72,7 @@ abstract class KremaJdepsModulesVerboseTask : DefaultTask() {
         if (out.exitValue != 0) {
             // 不当失败：-v 在部分 jar 组合下会一边非零退出一边照常吐出可用的报告，
             // 而这份报告正是用户跑这种 task 想看的东西。
-            logger.warn("jdeps -v 退出码 ${out.exitValue}，明细已写入 ${target.toAbsolutePath()}")
+            logger.warn("jdeps -v exited with code ${out.exitValue}; details written to ${target.toAbsolutePath()}")
         }
         logger.lifecycle(out.text)
     }

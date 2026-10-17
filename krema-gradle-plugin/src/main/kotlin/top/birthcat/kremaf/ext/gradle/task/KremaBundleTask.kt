@@ -5,25 +5,24 @@
 package top.birthcat.kremaf.ext.gradle.task
 
 import org.gradle.api.DefaultTask
-import org.gradle.api.GradleException
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.file.FileSystemOperations
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputDirectory
-import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.Nested
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.KremaTaskNames
-import top.birthcat.kremaf.ext.gradle.config.BundleIcons
-import top.birthcat.kremaf.ext.gradle.config.BundleSettings
-import top.birthcat.kremaf.ext.gradle.config.resolveBundleIcon
+import top.birthcat.kremaf.ext.gradle.config.BUNDLE_DEPS
+import top.birthcat.kremaf.ext.gradle.domain.BundleSettings
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.tool.JpackageTool
 import java.nio.file.Path
@@ -45,22 +44,16 @@ abstract class KremaBundleTask : DefaultTask() {
         description = "Build a runnable, uncompressed app-image (build/krema/bundle) with the jlink-trimmed runtime"
     }
 
+    @get:Internal
+    abstract val buildDir: DirectoryProperty
+
     /** 产物根目录。 */
     @get:OutputDirectory
-    abstract val outputDir: DirectoryProperty
+    abstract val outputBundleDir: DirectoryProperty
 
     /** 打包输入，`krema { }` 块的覆盖值已压过 toml。 */
-    @get:Internal
+    @get:Nested
     abstract val bundleSettings: Property<BundleSettings>
-
-    /**
-     * `kremaBuild` 聚好的 `lib/` 目录：app jar + 依赖 jar + assets jar。
-     *
-     * 按内容而非路径判变更：jar 内容才是打包的身份，目录随 `outputDir` 挪位不该让整个 app-image 重打。
-     */
-    @get:InputDirectory
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val appLibDir: DirectoryProperty
 
     /**
      * jlink 裁出的运行时镜像，即 jpackage 的 `--runtime-image`。
@@ -69,7 +62,11 @@ abstract class KremaBundleTask : DefaultTask() {
      */
     @get:InputDirectory
     @get:PathSensitive(PathSensitivity.NONE)
-    abstract val runtimeImageDir: DirectoryProperty
+    abstract val inputRuntimeImageDir: DirectoryProperty
+
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val inputJarDeps: ConfigurableFileCollection
 
     /** jpackage 所在的可执行文件目录，取自 JDK toolchain 而非 PATH。进缓存键：换 JDK 即视为新产物。 */
     @get:Input
@@ -79,54 +76,34 @@ abstract class KremaBundleTask : DefaultTask() {
     @get:Input
     abstract val hostPlatform: Property<Platform>
 
-    /**
-     * 三个按平台的图标，优先级高于 `[bundle].icon`。进缓存键：图标内容变了产物就该重打。
-     *
-     * 按内容而非路径判变更，且文件缺失即跳过，与 [resolveBundleIcon] 的语义一致。
-     */
-    @get:InputFile
-    @get:Optional
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val macIcon: RegularFileProperty
-
-    /** Windows 图标（ico）。缺失即跳过 `--icon`。 */
-    @get:InputFile
-    @get:Optional
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val winIcon: RegularFileProperty
-
-    /** Linux 图标（png）。缺失即跳过 `--icon`。 */
-    @get:InputFile
-    @get:Optional
-    @get:PathSensitive(PathSensitivity.NONE)
-    abstract val linuxIcon: RegularFileProperty
-
     @get:Inject
     abstract val execOperations: ExecOperations
 
+    @get:Inject
+    abstract val fileSystemOperations: FileSystemOperations
+
     @TaskAction
-    @Throws(GradleException::class)
     fun bundle() {
         val platform = hostPlatform.get()
         val settings = bundleSettings.get()
-        val icon =
-            resolveBundleIcon(
-                platform = platform,
-                icons =
-                    BundleIcons(
-                        mac = macIcon.orNull?.asFile?.toPath(),
-                        windows = winIcon.orNull?.asFile?.toPath(),
-                        linux = linuxIcon.orNull?.asFile?.toPath(),
-                        toml = settings.icon,
-                    ),
-            )
+        val bundleLibDir =
+            buildDir
+                .map {
+                    it.dir(BUNDLE_DEPS)
+                }.apply {
+                    get().asFile.mkdirs()
+                }
+        fileSystemOperations.sync {
+            from(inputJarDeps)
+            into(bundleLibDir)
+        }
         JpackageTool(execOperations).appImage(
             binDir = Path.of(jdkBinDir.get()),
             platform = platform,
-            settings = settings.copy(icon = icon),
-            appLibDir = appLibDir.get().asFile.toPath(),
-            runtimeImageDir = runtimeImageDir.get().asFile.toPath(),
-            dest = outputDir.get().asFile.toPath(),
+            settings = settings,
+            appLibDir = bundleLibDir.get().asFile.toPath(),
+            runtimeImageDir = inputRuntimeImageDir.get().asFile.toPath(),
+            dest = outputBundleDir.get().asFile.toPath(),
         )
     }
 }

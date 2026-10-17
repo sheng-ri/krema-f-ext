@@ -15,7 +15,7 @@ import top.birthcat.kremaf.ext.gradle.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.tool.Ed25519Signer
 
 /** 生成一对签名密钥。 */
-@DisableCachingByDefault(because = "生成随机密钥，同一输入必须产出不同结果")
+@DisableCachingByDefault(because = "generates a random key pair; identical inputs must produce different results")
 abstract class KremaSignerGenerateTask : DefaultTask() {
     init {
         group = KremaTaskNames.GROUP

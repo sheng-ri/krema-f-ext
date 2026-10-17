@@ -14,7 +14,7 @@ import java.nio.file.Path
  *
  * 自研：只复刻配置形状 —— 键名与默认值对齐上游 `krema-cli` 的 `KremaConfig`，解析器用 `org.tomlj:toml4j`。
  * 文件缺失时返回空 [KremaConfig]（缺哪项由必填校验报错）；`Toml.parse` 对非法 TOML 永不抛异常，错误落在
- * [TomlTable.hasErrors]，所以要显式检查 —— 否则一个 `[buidle]` 拼写错误会被静默当成「配置全走默认」，
+ * [org.tomlj.TomlParseResult.hasErrors]，所以要显式检查 —— 否则一个 `[buidle]` 拼写错误会被静默当成「配置全走默认」，
  * 等到打包产出错名字的产物才被发现。
  */
 class KremaConfigLoader {
@@ -29,12 +29,12 @@ class KremaConfigLoader {
         val config = Toml.parse(path)
         if (config.hasErrors()) {
             val detail = config.errors().joinToString("; ") { it.toString() }
-            throw IllegalStateException("krema.toml 语法错误：$path（$detail）")
+            throw IllegalStateException("krema.toml syntax error: $path ($detail)")
         }
         return fromToml(config)
     }
 
-    private fun fromToml(toml: TomlTable): KremaConfig =
+    private fun fromToml(toml: TomlTable) =
         KremaConfig(
             packageName = toml.getString("package.name"),
             version = toml.getString("package.version"),
@@ -42,25 +42,24 @@ class KremaConfigLoader {
             build = fromBuild(toml),
             frontend = fromFrontend(toml),
             bundle = fromBundle(toml),
-            deepLinkSchemes = toml.getArrayOrEmpty("deep-link.schemes").toList().filterIsInstance<String>(),
         )
 
-    private fun fromBuild(toml: TomlTable): Build =
+    private fun fromBuild(toml: TomlTable) =
         Build(
-            outDir = toml.getString("build.out_dir"),
+            frontendOutDir = toml.getString("build.frontend_out_dir"),
             mainClass = toml.getString("build.main_class"),
             devUrl = toml.getString("build.dev_url"),
         )
 
     /** 前端目录与命令落在 `[build]` 段的 `frontend_*` 键上，但住处是 [Frontend]。 */
-    private fun fromFrontend(toml: TomlTable): Frontend =
+    private fun fromFrontend(toml: TomlTable) =
         Frontend(
             dir = toml.getString("build.frontend_dir"),
             buildCommand = toml.getString("build.frontend_command"),
             installCommand = toml.getString("build.frontend_install_command"),
         )
 
-    private fun fromBundle(toml: TomlTable): Bundle =
+    private fun fromBundle(toml: TomlTable) =
         Bundle(
             icon = toml.getString("bundle.icon"),
             identifier = toml.getString("bundle.identifier"),

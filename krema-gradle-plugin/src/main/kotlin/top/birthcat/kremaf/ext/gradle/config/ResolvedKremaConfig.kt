@@ -7,10 +7,14 @@ package top.birthcat.kremaf.ext.gradle.config
 import org.gradle.api.file.Directory
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Provider
-import java.nio.file.Path
+import top.birthcat.kremaf.ext.gradle.domain.BundleIcons
+import top.birthcat.kremaf.ext.gradle.domain.BundleSettings
+import top.birthcat.kremaf.ext.gradle.domain.Platform
+import top.birthcat.kremaf.ext.gradle.domain.PlatformDetector
+import top.birthcat.kremaf.ext.gradle.domain.resolveBundleIcon
 
 /**
- * 单一裁决点：ext 覆盖 toml 的优先级在此算清一次，全程惰性、全 provider，task 在注册点直接 bind。
+ * 单一裁决点：ext 覆盖 kremaConfig 的优先级在此算清一次，全程惰性、全 provider，task 在注册点直接 bind。
  *
  * 不依赖 `Project`：调用方把 `layout.projectDirectory` 传进来即可，故不引用 `Project` 类型。
  * 持有的 `ext`、`kremaConfig` 与 `projectDir` 皆配置缓存可序列化；只在注册期闭包里当局部值用，
@@ -20,75 +24,79 @@ class ResolvedKremaConfig(
     private val ext: KremaExtension,
     private val kremaConfig: Provider<KremaConfig>,
     private val projectDir: Directory,
+    buildDir: DirectoryProperty,
 ) {
-    private val toml get() = kremaConfig
+    val outputDir = ext.outputDir.orElse(buildDir.dir("krema"))
+    val bundleDir = outputDir.map { it.dir(BUNDLE_DIR_NAME) }
+    val runtimeModules = ext.runtime.modules
 
-    /** 前端构建命令：toml 为底，`krema.frontend.buildCommand` 覆盖。 */
-    val buildCommand: Provider<String> =
-        ext.frontend.buildCommand.orElse(toml.map { it.frontend.buildCommand.required(FRONTEND_COMMAND_HINT) })
+    /** 前端构建命令：kremaConfig 为底，`krema.frontend.buildbCommand` 覆盖。 */
+    val buildCommand =
+        ext.frontend.buildCommand.orElse(kremaConfig.map { it.frontend.buildCommand.required(FRONTEND_COMMAND_HINT) })
 
     /**
-     * 前端依赖安装命令：toml 为底，`krema.frontend.installCommand` 覆盖。
+     * 前端依赖安装命令：kremaConfig 为底，`krema.frontend.installCommand` 覆盖。
      * 不配或配了空白即 absent，`kremaFrontendBuild` 里 `orNull` 跳过安装。
      */
-    val installCommand: Provider<String> =
+    val installCommand =
         ext.frontend.installCommand
-            .orElse(toml.map { it.frontend.installCommand })
-            .filter { it.isNotBlank() }
+            .orElse(kremaConfig.map { it.frontend.installCommand })
 
-    /** 前端产物目录，取自 toml 的 `build.out_dir`。 */
-    val outDir: Provider<String> = toml.map { it.build.outDir.required(OUT_DIR_HINT) }
-
-    /** 前端工程目录：ext.dir 覆盖 toml，都没写即项目根。 */
-    val frontendDir: Provider<Directory> =
+    /** 前端产物目录，取自 kremaConfig 的 `build.fronend_out_dir`。 */
+    val frontendOutDir =
         ext.frontend.dir
-            .orElse(toml.map { it.frontend.dir ?: "." })
+            .orElse(kremaConfig.map { it.build.frontendOutDir })
+            .map { projectDir.dir(it.required(FRONTEND_OUT_DIR_HINT)) }
+
+    /** 前端工程目录：ext.dir 覆盖 kremaConfig，都没写即项目根。 */
+    val frontendDir =
+        ext.frontend.dir
+            .orElse(kremaConfig.map { it.frontend.dir ?: "." })
             .map { projectDir.dir(it) }
 
     /**
-     * 主类：ext 覆盖 toml，都没写即报错。
-     * blank 的 ext 值回落 toml：`flatMap` 里把「set 但空白」转成 absent，才轮到 `orElse` 取 toml，
-     * 否则 `Property.map { null }` 是「present 的 null」不会触发回落。
-     * 回落分支直接返回 `ext.mainClass` 而非 `project.provider { v }`：后者会把 `Project` 关进成为
-     * 真输入的 provider 链，配置缓存无法序列化。
+     * 主类：ext 覆盖 kremaConfig，都没写即报错。
      */
-    val mainClass: Provider<String> =
+    val mainClass =
         ext.mainClass
-            .flatMap { v -> if (v.isNotBlank()) ext.mainClass else toml.map { it.build.mainClass } }
-            .orElse(toml.map { it.build.mainClass })
+            .flatMap { v -> if (v.isNotBlank()) ext.mainClass else kremaConfig.map { it.build.mainClass } }
+            .orElse(kremaConfig.map { it.build.mainClass })
             .map { it.required(MAIN_CLASS_HINT) }
 
-    /** 开发期前端地址：ext 覆盖 toml，都没写即报错。 */
-    val devUrl: Provider<String> =
-        ext.devUrl.orElse(toml.map { it.build.devUrl }).map { it.required(DEV_URL_HINT) }
+    /** 开发期前端地址：ext 覆盖 kremaConfig，都没写即报错。 */
+    val devUrl =
+        ext.devUrl.orElse(kremaConfig.map { it.build.devUrl }).map { it.required(DEV_URL_HINT) }
 
     /** 应用名，jar 与 app-image 目录都从它来。 */
-    val appName: Provider<String> = toml.map { it.packageName.required(PACKAGE_NAME_HINT) }
+    val appName = kremaConfig.map { it.packageName.required(PACKAGE_NAME_HINT) }
 
-    /** 打包输入，含 toml 内双来源 identifier（`bundle.identifier ?: package.identifier`）。 */
-    fun bundleSettings(outputDir: Path): Provider<BundleSettings> =
-        mainClass.zip(toml) { mc, loaded ->
+    /** 打包输入，含 kremaConfig 内双来源 identifier（`bundle.identifier ?: package.identifier`）。 */
+    val bundleSettings =
+        kremaConfig.map { loaded ->
+            val icon =
+                when (PlatformDetector.detect()) {
+                    Platform.DARWIN -> ext.bundling.macIcon.orNull
+                    Platform.WINDOWS -> ext.bundling.winIcon.orNull
+                    Platform.LINUX -> ext.bundling.linuxIcon.orNull
+                    else -> null
+                }?.asFile?.toPath() ?: loaded.bundle.icon?.let {
+                    projectDir.asFile.toPath().resolve(it)
+                }
             BundleSettings(
                 appName = loaded.packageName.required(PACKAGE_NAME_HINT),
-                outputDir = outputDir,
                 identifier = loaded.bundle.identifier ?: loaded.identifier.required(IDENTIFIER_HINT),
                 version = loaded.version.required(VERSION_HINT),
-                mainClass = mc,
-                icon = loaded.bundle.icon?.let { projectDir.asFile.toPath().resolve(it) },
-                deepLinkSchemes = loaded.deepLinkSchemes,
+                mainClass = mainClass.get().required(MAIN_CLASS_HINT),
+                icon = icon,
             )
         }
+
 }
 
-/** 产物根目录约定：ext.outputDir 覆盖，没写即 build/krema。 */
-fun kremaOutputDir(
-    ext: KremaExtension,
-    buildDirectory: DirectoryProperty,
-): Provider<Directory> = ext.outputDir.orElse(buildDirectory.dir("krema"))
-
-private const val FRONTEND_COMMAND_HINT = "前端构建命令：krema.frontend.buildCommand 或 krema.toml 的 build.frontend_command"
-private const val OUT_DIR_HINT = "前端产物目录：krema.toml 的 build.out_dir"
-private const val MAIN_CLASS_HINT = "主类：krema.mainClass 或 krema.toml 的 build.main_class"
-private const val DEV_URL_HINT = "开发期前端地址：krema.devUrl 或 krema.toml 的 build.dev_url"
-private const val IDENTIFIER_HINT = "包标识：krema.toml 的 package.identifier"
-private const val VERSION_HINT = "应用版本：krema.toml 的 package.version"
+private const val FRONTEND_COMMAND_HINT =
+    "frontend build command: krema.frontend.buildCommand or build.frontend_command in krema.toml"
+private const val FRONTEND_OUT_DIR_HINT = "frontend output directory: build.frontend_out_dir in krema.toml"
+private const val MAIN_CLASS_HINT = "main class: krema.mainClass or build.main_class in krema.toml"
+private const val DEV_URL_HINT = "dev frontend URL: krema.devUrl or build.dev_url in krema.toml"
+private const val IDENTIFIER_HINT = "package identifier: package.identifier in krema.toml"
+private const val VERSION_HINT = "application version: package.version in krema.toml"

@@ -22,12 +22,11 @@ data class KremaConfig(
     val build: Build = Build(),
     val frontend: Frontend = Frontend(),
     val bundle: Bundle = Bundle(),
-    val deepLinkSchemes: List<String> = emptyList(),
 ) : Serializable
 
 /** 构建约定：产物目录与主类。前端产物的 classpath 落点由 Krema 约定为 `assets`，不开放配置。 */
 data class Build(
-    val outDir: String? = null,
+    val frontendOutDir: String? = null,
     val mainClass: String? = null,
     val devUrl: String? = null,
 ) : Serializable
@@ -53,7 +52,7 @@ data class Frontend(
  * 直到产物带着别人的名字发出去才被人发现。
  */
 @Throws(IllegalStateException::class)
-internal fun <T : Any> T?.required(hint: String): T = this ?: error("未配置$hint")
+internal fun <T : Any> T?.required(hint: String) = this ?: error("Not configured: $hint")
 
 /** 应用名的报错文案：产名、jar 名与 app-image 目录都从它来，故多处共用一句。 */
-internal const val PACKAGE_NAME_HINT = "应用名：krema.toml 的 package.name"
+internal const val PACKAGE_NAME_HINT = "application name: package.name in krema.toml"

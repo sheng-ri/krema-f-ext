@@ -22,7 +22,7 @@ import top.birthcat.kremaf.ext.gradle.TemplateGenerator
  *
  * 唯一不要求 `krema.toml` 先存在的 task —— 它的产物之一就是那份 toml。
  */
-@DisableCachingByDefault(because = "生成骨架写进用户项目目录，输出不由本 task 独占")
+@DisableCachingByDefault(because = "writes the scaffold into the user's project directory; the output is not owned by this task")
 abstract class KremaInitTask : DefaultTask() {
     init {
         group = KremaTaskNames.GROUP

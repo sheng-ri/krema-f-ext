@@ -25,7 +25,7 @@ import javax.inject.Inject
  * 直接继承 [DefaultTask]：它既不读 `krema.toml` 也不产出文件，没有打包输入要 bind，
  * 若声明 `build/krema` 为输出目录还会与 kremaBuild 等 task 撞成重叠输出。
  */
-@DisableCachingByDefault(because = "只打印推导结果，不产出文件")
+@DisableCachingByDefault(because = "prints the derived module list only; produces no files")
 abstract class KremaJdepsModulesTask : DefaultTask() {
     init {
         group = KremaTaskNames.GROUP
@@ -48,15 +48,18 @@ abstract class KremaJdepsModulesTask : DefaultTask() {
     abstract val execOperations: ExecOperations
 
     @TaskAction
-    @Throws(GradleException::class)
     fun printModules() {
         val out =
-            JdepsRunner(execOperations, Path.of(jdkBinDir.get()), multiRelease.get(), classpathFiles)
-                .run(verbose = false)
+            JdepsRunner(
+                execOperations,
+                Path.of(jdkBinDir.get()),
+                multiRelease.get(),
+                classpathFiles,
+            ).run(verbose = false)
         val modules = out.firstLine()
         if (out.exitValue != 0 || modules.isEmpty()) {
-            throw GradleException("推导运行时模块失败：\n${out.text}")
+            throw GradleException("Failed to derive runtime modules:\n${out.text}")
         }
-        logger.lifecycle("运行时模块：$modules")
+        logger.lifecycle("Runtime Modules: $modules")
     }
 }

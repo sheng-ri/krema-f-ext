@@ -6,7 +6,7 @@ package top.birthcat.kremaf.ext.gradle.tool
 
 import org.gradle.api.GradleException
 import org.gradle.process.ExecOperations
-import top.birthcat.kremaf.ext.gradle.config.BundleSettings
+import top.birthcat.kremaf.ext.gradle.domain.BundleSettings
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.domain.PlatformDetector
 import java.io.File
@@ -27,7 +27,6 @@ class AppImageTool(
      * 把 [appImageDir] 封装成 `<appName>.AppImage` 落到 [outputDir]，返回产物路径。
      * [autoDownload] 为 false 且 PATH 上找不到工具时抛 GradleException，提示手动安装或开开关。
      */
-    @Throws(GradleException::class)
     fun packageAppImage(
         appImageDir: Path,
         outputDir: Path,
@@ -40,8 +39,8 @@ class AppImageTool(
                     download(outputDir)
                 } else {
                     throw GradleException(
-                        "PATH 上找不到 appimagetool，且 krema.bundling.appImageToolAutoDownload 为 false。" +
-                            "手动安装 appimagetool 并放进 PATH，或把该开关打开。",
+                        "appimagetool was not found on PATH and krema.bundling.appImageToolAutoDownload is false. " +
+                            "Install appimagetool and put it on PATH, or enable that switch.",
                     )
                 }
         // appimagetool 要 app dir 里有 `<appName>.desktop`（jpackage 的 app-image 不带）。但那是 kremaBundle 的产物，
@@ -67,7 +66,7 @@ class AppImageTool(
         val out = outputDir.resolve("${settings.appName}.AppImage")
         runCommand(
             listOf(tool.toAbsolutePath().toString(), staging.toString(), out.toAbsolutePath().toString()),
-            "appimagetool 封装 AppImage 失败",
+            "appimagetool failed to package the AppImage",
         )
         // 舞台是输出区里的临时副本，打包完即删，别把整份 app-image 留在产物里。
         staging.toFile().deleteRecursively()
@@ -103,7 +102,6 @@ class AppImageTool(
      * 因此无 FUSE 也能跑，抽出的是普通 ELF 二进制，用它打包不再依赖 FUSE。已经是真二进制（PATH 里装的那种）
      * 不认 `--appimage-extract`，抽出失败就回退到原工具。
      */
-    @Throws(GradleException::class)
     private fun resolveAppImageTool(
         rawTool: Path,
         outputDir: Path,
@@ -120,23 +118,22 @@ class AppImageTool(
             )
         if (result.exitValue != 0) return rawTool
         if (!Files.isRegularFile(inner)) {
-            throw GradleException("抽出 appimagetool 失败：\n${result.output}")
+            throw GradleException("Failed to extract appimagetool: \n${result.output}")
         }
         return inner
     }
 
-    @Throws(GradleException::class)
     private fun runCommand(
         command: List<String>,
         failure: String,
     ) {
         val result = execOperations.capture(command)
-        if (result.exitValue != 0) throw GradleException("$failure：\n${result.output}")
+        if (result.exitValue != 0) throw GradleException("$failure: \n${result.output}")
     }
 
     companion object {
         /** 当前平台的工具可执行文件名。 */
-        private fun executableName(): String = if (PlatformDetector.detect() == Platform.WINDOWS) "appimagetool.exe" else "appimagetool"
+        private fun executableName() = if (PlatformDetector.detect() == Platform.WINDOWS) "appimagetool.exe" else "appimagetool"
 
         /**
          * 在给定目录列表里找 `appimagetool`。
@@ -171,10 +168,10 @@ class AppImageTool(
                 target.toFile().setExecutable(true)
             }.onFailure { cause ->
                 throw IllegalStateException(
-                    "自动下载 appimagetool 失败（${cause.message}）。两条出路：\n" +
-                        "  1. 手动安装 appimagetool 并放进 PATH；\n" +
-                        "  2. 把 krema.bundling.appImageToolAutoDownload 设为 false 关闭自动下载。\n" +
-                        "下载地址：$url",
+                    "Failed to download appimagetool (${cause.message}). Two options:\n" +
+                        "  1. Install appimagetool manually and put it on PATH;\n" +
+                        "  2. Set krema.bundling.appImageToolAutoDownload to false to disable automatic download.\n" +
+                        "Download URL: $url",
                     cause,
                 )
             }

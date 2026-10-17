@@ -6,9 +6,8 @@ package top.birthcat.kremaf.ext.gradle.tool
 
 import org.gradle.api.GradleException
 import org.gradle.process.ExecOperations
-import top.birthcat.kremaf.ext.gradle.config.BundleSettings
-import top.birthcat.kremaf.ext.gradle.config.appJarName
 import top.birthcat.kremaf.ext.gradle.domain.BundleFormat
+import top.birthcat.kremaf.ext.gradle.domain.BundleSettings
 import top.birthcat.kremaf.ext.gradle.domain.Platform
 import top.birthcat.kremaf.ext.gradle.domain.appImageDirName
 import top.birthcat.kremaf.ext.gradle.domain.executableSuffix
@@ -25,7 +24,6 @@ class JpackageTool(
      * 而它生成的启动器带 ReadOnly 属性，deleteRecursively 删不掉只读文件，
      * 目录因删不空而残留，下次构建会卡死在「目录已存在」。
      */
-    @Throws(GradleException::class)
     fun appImage(
         binDir: Path,
         platform: Platform,
@@ -49,12 +47,14 @@ class JpackageTool(
                     listOf(
                         "--type",
                         "app-image",
+                        "--app-version",
+                        settings.version,
                         "--name",
                         settings.appName,
                         "--input",
                         appLibDir.toString(),
                         "--main-jar",
-                        appJarName(settings),
+                        settings.appJarName,
                         "--main-class",
                         settings.mainClass,
                         "--runtime-image",
@@ -68,22 +68,20 @@ class JpackageTool(
                 addAll(macPackageIdentifier(platform, settings.identifier))
                 settings.icon?.let { addAll(listOf("--icon", it.toString())) }
             }
-        run(command, "jpackage 生成 app-image 失败")
+        run(command, "jpackage failed to generate the app-image")
     }
 
     /** 把现成 app-image 包成本平台的可安装件（平台 task 的 jpackage 分支）。 */
-    @Throws(GradleException::class)
     fun installer(
         binDir: Path,
         format: BundleFormat,
         settings: BundleSettings,
         appImageDir: Path,
         dest: Path,
-        icon: Path?,
     ) {
         val type =
             format.jpackageType
-                ?: throw GradleException("格式 $format 没有 jpackage type，不该走到安装器分支")
+                ?: throw GradleException("Format $format has no jpackage type; it should not reach the installer branch")
         val command =
             buildList {
                 add(jpackage(binDir))
@@ -99,16 +97,16 @@ class JpackageTool(
                         appImageDir.toString(),
                     ),
                 )
-                icon?.let { addAll(listOf("--icon", it.toString())) }
+                settings.icon?.let { addAll(listOf("--icon", it.toString())) }
                 addAll(macPackageIdentifier(format.platform, settings.identifier))
             }
-        run(command, "jpackage 生成 ${format.id} 失败")
+        run(command, "jpackage failed to generate ${format.id}")
     }
 
-    private fun jpackage(binDir: Path): String = binDir.resolve("jpackage" + executableSuffix()).toString()
+    private fun jpackage(binDir: Path) = binDir.resolve("jpackage" + executableSuffix()).toString()
 
     // macOS 应用进程须跑主线程，缺此项启动器起不来。
-    private fun javaOptions(platform: Platform): List<String> =
+    private fun javaOptions(platform: Platform) =
         buildList {
             add("--enable-native-access=ALL-UNNAMED")
             if (platform == Platform.DARWIN) add("-XstartOnFirstThread")
@@ -118,14 +116,17 @@ class JpackageTool(
     private fun macPackageIdentifier(
         platform: Platform,
         identifier: String,
-    ): List<String> = if (platform == Platform.DARWIN) listOf("--mac-package-identifier", identifier) else emptyList()
+    ) = if (platform == Platform.DARWIN) {
+        listOf("--mac-package-identifier", identifier)
+    } else {
+        emptyList()
+    }
 
-    @Throws(GradleException::class)
     private fun run(
         command: List<String>,
         failure: String,
     ) {
         val result = execOperations.capture(command)
-        if (result.exitValue != 0) throw GradleException("$failure：\n${result.output}")
+        if (result.exitValue != 0) throw GradleException("$failure: \n${result.output}")
     }
 }

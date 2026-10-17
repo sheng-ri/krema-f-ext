@@ -1,7 +1,8 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    `java-gradle-plugin`
+    `kotlin-dsl`
     alias(libs.plugins.spotless)
+    alias(libs.plugins.dokka)
     `maven-publish`
 }
 
@@ -47,12 +48,16 @@ publishing {
 
 kotlin {
     jvmToolchain(25)
+    compilerOptions {
+        optIn = listOf("kotlin.io.path.ExperimentalPathApi")
+    }
 }
 
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(25))
     }
+    withSourcesJar()
 }
 
 tasks.withType<JavaCompile>().configureEach {

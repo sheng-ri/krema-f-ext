@@ -3,6 +3,7 @@ junit = "5.11.4"
 tomlj = "2.2.0"
 spotless = "8.10.3"
 kotlin = "2.4.20"
+dokka = "2.2.0"
 
 [libraries]
 tomlj = { module = "org.tomlj:tomlj", version.ref = "tomlj" }
@@ -14,3 +15,4 @@ spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
 foojay-resolver = { id = "org.gradle.toolchains.foojay-resolver-convention", version = "1.0.0" }
+dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

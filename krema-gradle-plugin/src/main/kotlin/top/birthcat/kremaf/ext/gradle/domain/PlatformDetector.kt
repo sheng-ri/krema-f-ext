@@ -14,30 +14,18 @@ import java.util.Locale
  * 探测口径按 JVM 的 `os.name` / `os.arch`，覆盖 Krema 支持的三个平台族。
  */
 object PlatformDetector {
-    fun detect(): Platform = Platform.of(System.getProperty("os.name"))
+    fun detect() = Platform.of(System.getProperty("os.name"))
 
     /** 探测当前架构标识，如 `aarch64`、`x86_64`。 */
-    fun getArch(): String = normalizeArch(System.getProperty("os.arch"))
+    fun getArch() = normalizeArch(System.getProperty("os.arch"))
 
-    fun normalizeArch(arch: String): String =
+    fun normalizeArch(arch: String) =
         when (arch.lowercase(Locale.ROOT)) {
             "aarch64" -> "aarch64"
             "arm64" -> "aarch64"
             "x86_64", "amd64" -> "x86_64"
             "x86", "i386", "i686" -> "x86"
             else -> arch.lowercase(Locale.ROOT)
-        }
-
-    /** 把基础库名格式化成当前平台的动态库文件名。 */
-    fun formatLibraryName(
-        baseName: String,
-        platform: Platform = detect(),
-    ): String =
-        when (platform) {
-            Platform.DARWIN -> "lib$baseName.dylib"
-            Platform.LINUX -> "lib$baseName.so"
-            Platform.WINDOWS -> "$baseName.dll"
-            Platform.UNKNOWN -> baseName
         }
 }
 
@@ -48,10 +36,6 @@ enum class Platform {
     WINDOWS,
     UNKNOWN,
     ;
-
-    /** 库文件名前缀，`lib` 或空。 */
-    val libraryPrefix: String
-        get() = if (this == WINDOWS) "" else "lib"
 
     companion object {
         fun of(osName: String): Platform {
@@ -64,24 +48,10 @@ enum class Platform {
             }
         }
     }
-
-    /**
-     * 图标文件后缀，按平台推断：`krema.toml` 的 `[bundle].icon` 按此后缀兜底匹配。
-     *
-     * 平台未知时抛 [IllegalStateException]：未知平台没有可推断的后缀。
-     */
-    @Throws(IllegalStateException::class)
-    fun iconSuffix(): String =
-        when (this) {
-            DARWIN -> "icns"
-            WINDOWS -> "ico"
-            LINUX -> "png"
-            UNKNOWN -> error("无法为未知平台推断图标后缀：$this")
-        }
 }
 
 /** 当前平台的可执行文件后缀，Windows 上为 `.exe`。 */
-internal fun executableSuffix(): String = if (File.separatorChar == '\\') ".exe" else ""
+internal fun executableSuffix() = if (File.separatorChar == '\\') ".exe" else ""
 
 /**
  * 把用户写的一行命令变成 `ProcessBuilder` / `ExecOperations` 用的 argv。
@@ -91,7 +61,7 @@ internal fun executableSuffix(): String = if (File.separatorChar == '\\') ".exe"
  * 走 `cmd` 顺带把 `&&`、管道这些 shell 语法兑现给用户 —— 配置项本来的语义就是「一整行命令」。
  * 其余平台不套 shell：少一层进程，退出码与信号直达。
  */
-internal fun commandLineFor(command: String): List<String> = commandLineFor(command, PlatformDetector.detect())
+internal fun commandLineFor(command: String) = commandLineFor(command, PlatformDetector.detect())
 
 /**
  * 把一行命令变成 argv，显式给定平台（便于单测 Windows 借道分支）。
@@ -115,4 +85,4 @@ internal fun commandLineFor(
  *
  * macOS 上 jpackage 按惯例给 app-image 加 `.app` 后缀（它就是应用身份本身），其余平台与 `--name` 同名。
  */
-fun Platform.appImageDirName(appName: String): String = if (this == Platform.DARWIN) "$appName.app" else appName
+fun Platform.appImageDirName(appName: String) = if (this == Platform.DARWIN) "$appName.app" else appName
