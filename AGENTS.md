@@ -24,7 +24,7 @@
 
 - 代码合并/提交到远程时对改动的模块执行 `./krema-gradle-plugin/gradlew spotlessApply`（或 `./krema-demo/gradlew`）。而平时修改不应该频繁执行这个行为。
 - 测试方法名必须 ≤30 字符；每个 `@Test` 方法必须加 `@DisplayName` 标注中文名。
-- 使用链式调用风格。
+- 使用链式调用风格，但是第一个调用
 - 优先把 task 的 `dependsOn` 写在配置开头（`description` 或 `configureProject` 之后）。
 - kotlin所有函数，属性，字段定义省略类型标注
 - 针对公开api，日志和异常信息使用英文

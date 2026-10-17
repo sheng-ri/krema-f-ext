@@ -25,7 +25,6 @@ class NoteCommands {
         return note
     }
 
-
     /** 改后端状态并回写新值，前端拿返回值确认落库后的内容。 */
     @KremaCommand("update")
     fun update(text: String): String {

@@ -5,8 +5,8 @@ identifier = "com.example.kremademo"
 
 [build]
 main_class = "com.example.kremademo.Main"
-dev_url = "http://localhost:5173"
+frontend_dev_url = "http://localhost:5173"
 frontend_dir = "front"
-frontend_out_dir = "front/dist"
+out_dir = "front/dist"
 frontend_command = "pnpm run build"
 frontend_install_command = "pnpm install"
