@@ -87,12 +87,9 @@ abstract class KremaBundleTask : DefaultTask() {
         val platform = hostPlatform.get()
         val settings = bundleSettings.get()
         val bundleLibsDir =
-            buildDir
-                .map {
-                    it.dir(BUNDLE_LIBS)
-                }.apply {
-                    get().asFile.mkdirs()
-                }
+            buildDir.map {
+                it.dir(BUNDLE_LIBS)
+            }
         fileSystemOperations.sync {
             from(inputJarDeps)
             into(bundleLibsDir)

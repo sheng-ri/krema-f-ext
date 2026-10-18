@@ -142,13 +142,7 @@ abstract class KremaBundlingExtension {
      */
     fun windows(configure: Action<KremaWindowsExtension>) = configure.execute(windows)
 
-    /**
-     * Formats to build on the host platform; formats configured for other platforms are dropped here.
-     *
-     * Selection is by property name, not by [BundleFormat.platform]: the property already
-     * declares the owner, and filtering again would silently swallow a DMG written into
-     * [windowsFormats].
-     */
+    /** 宿主平台要构建的格式；再按 platform 过滤会吞掉属性放错的格式。 */
     internal fun formatsForHost() =
         selectHostFormats(PlatformDetector.detect(), macosFormats.get(), windowsFormats.get(), linuxFormats.get())
 }
@@ -198,5 +192,5 @@ internal fun selectHostFormats(
     Platform.DARWIN -> macos
     Platform.WINDOWS -> windows
     Platform.LINUX -> linux
-    Platform.UNKNOWN -> emptySet<BundleFormat>()
+    Platform.UNKNOWN -> emptySet()
 }

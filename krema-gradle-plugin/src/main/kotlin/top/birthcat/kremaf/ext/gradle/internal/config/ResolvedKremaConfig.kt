@@ -31,7 +31,9 @@ internal class ResolvedKremaConfig(
     val bundleDir = outputDir.map { it.dir(BUNDLE_DIR_NAME) }
 
     /** 显式模块清单；空集由 jdeps 推导。 */
-    val runtimeModules = ext.runtime.modules
+    val runtimeModules = ext.runtime.modules.orElse(emptySet())
+
+    val appImageToolAutoDownload = ext.bundling.appImageToolAutoDownload.orElse(true)
 
     /** 前端构建命令，ext 优先。 */
     val buildCommand =

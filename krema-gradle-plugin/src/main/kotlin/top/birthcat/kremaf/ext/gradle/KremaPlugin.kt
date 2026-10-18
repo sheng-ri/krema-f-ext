@@ -20,6 +20,7 @@ import top.birthcat.kremaf.ext.gradle.internal.registerKremaTasks
  * Creates the `krema { }` extension tree, applies the Java plugin that the task graph builds on,
  * and registers the Krema tasks.
  */
+@Suppress("unused")
 class KremaPlugin : Plugin<Project> {
     /** Wires the extensions and task graph into [project]. */
     override fun apply(project: Project) {

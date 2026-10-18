@@ -76,7 +76,7 @@ abstract class KremaBundleRunTask : DefaultTask() {
                     interrupted = true
                     break
                 }
-                if (Thread.currentThread().isInterrupted()) {
+                if (Thread.currentThread().isInterrupted) {
                     interrupted = true
                     break
                 }

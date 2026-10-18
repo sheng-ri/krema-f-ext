@@ -19,7 +19,7 @@ enum class Platform {
     ;
 
     companion object {
-        /** Maps a JVM `os.name` value to a platform family. */
+        /** 将 JVM 的 os.name 映射到平台族。 */
         internal fun of(osName: String) =
             osName.lowercase(Locale.ROOT).let { name ->
                 when {

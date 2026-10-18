@@ -14,6 +14,7 @@ import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.of
 import org.gradle.kotlin.dsl.register
 import org.gradle.kotlin.dsl.registerIfAbsent
+import top.birthcat.kremaf.ext.gradle.api.BundleFormat
 import top.birthcat.kremaf.ext.gradle.api.KremaExtension
 import top.birthcat.kremaf.ext.gradle.api.KremaProcessCleanupService
 import top.birthcat.kremaf.ext.gradle.api.KremaTaskNames
@@ -70,10 +71,7 @@ internal fun Project.registerKremaTasks() {
         .srcDir(resolvedConfig.javaSourceDir)
     gradle.sharedServices.registerIfAbsent(PROCESS_CLEANUP_SERVICE, KremaProcessCleanupService::class) {}
 
-    tasks.register<KremaInitTask>(KremaTaskNames.INIT) {
-        projectDir.convention(layout.projectDirectory)
-        outputDir.convention(layout.projectDirectory)
-    }
+    tasks.register<KremaInitTask>(KremaTaskNames.INIT)
 
     val frontendBuildTask =
         tasks.register<KremaFrontendBuildTask>(KremaTaskNames.FRONTEND_BUILD) {
@@ -170,18 +168,7 @@ internal fun Project.registerKremaTasks() {
                     description =
                         "Build the ${platformFormat.id} platform package from the app-image (build/krema/platform/${platformFormat.id})"
                     dependsOn(bundleTask)
-                    outputDir.convention(resolvedConfig.outputDir.map { it.dir(platformOutputDirName(platformFormat.id)) })
-                    bundleSettings.convention(resolvedConfig.bundleSettings)
-                    format.set(platformFormat)
-                    // --win-* 只有 Windows 安装器认，别的格式不挂，免得白占缓存键。
-                    if (platformFormat.platform == Platform.WINDOWS) {
-                        windowsOptions.convention(resolvedConfig.windowsInstallerOptions)
-                    }
-                    appImageDir.convention(
-                        resolvedConfig.bundleDir.zip(resolvedConfig.appName) { dir, appName -> dir.dir(appName) },
-                    )
-                    jdkBinDir.set(jdkBinDir())
-                    appImageToolAutoDownload.convention(ext.bundling.appImageToolAutoDownload.orElse(true))
+                    resolvedConfig.configurePlatform(platformFormat)
                 }
                 name
             }
@@ -226,6 +213,22 @@ internal fun Project.registerKremaTasks() {
     }
 }
 
+context(task: KremaPlatformTask)
+private fun ResolvedKremaConfig.configurePlatform(platformFormat: BundleFormat) {
+    task.outputDir.convention(outputDir.map { it.dir(platformOutputDirName(platformFormat.id)) })
+    task.bundleSettings.convention(bundleSettings)
+    task.format.set(platformFormat)
+    // --win-* 只有 Windows 安装器认，别的格式不挂，免得白占缓存键。
+    if (platformFormat.platform == Platform.WINDOWS) {
+        task.windowsOptions.convention(windowsInstallerOptions)
+    }
+    task.appImageDir.convention(
+        bundleDir.zip(appName) { dir, appName -> dir.dir(appName) },
+    )
+    task.jdkBinDir.set(task.project.jdkBinDir())
+    task.appImageToolAutoDownload.convention(appImageToolAutoDownload)
+}
+
 private fun ResolvedKremaConfig.configureBundle(
     task: KremaBundleTask,
     runtimeTask: TaskProvider<KremaRuntimeImageTask>,
@@ -240,13 +243,13 @@ private fun ResolvedKremaConfig.configureBundle(
 
 private fun ResolvedKremaConfig.configureJdepsModulesVerbose(task: KremaJdepsModulesVerboseTask) {
     task.jdkBinDir.set(task.project.jdkBinDir())
-    task.multiRelease.set(task.project.targetBytecodeVersion)
-    task.reportFile.convention(outputDir.map { it.file(JDEPS_VERBOSE_REPORT_NAME) })
+    task.multiRelease.convention(task.project.targetBytecodeVersion)
+    task.reportFilePath.convention(outputDir.map { it.file(JDEPS_VERBOSE_REPORT_NAME).asFile.absolutePath })
 }
 
 private fun KremaJdepsModulesTask.configureJdepsModules(classpath: KremaApplicationClasspath) {
     jdkBinDir.set(project.jdkBinDir())
-    multiRelease.set(project.targetBytecodeVersion)
+    multiRelease.convention(project.targetBytecodeVersion)
     classpathFiles.from(classpath.classesDirs)
     classpathFiles.from(classpath.runtimeClasspath)
 }
@@ -255,8 +258,8 @@ private fun ResolvedKremaConfig.configureRuntimeImage(task: KremaRuntimeImageTas
     task.outputRuntimeImageDir.convention(outputDir.map { it.dir(RUNTIME_DIR_NAME) })
     task.jdkBinDir.set(task.project.jdkBinDir())
     task.hostPlatform.set(PlatformDetector.detect())
-    task.multiRelease.set(task.project.targetBytecodeVersion)
-    task.inputModules.convention(runtimeModules.orElse(emptySet()))
+    task.multiRelease.convention(task.project.targetBytecodeVersion)
+    task.inputModules.convention(runtimeModules)
 }
 
 private fun ResolvedKremaConfig.configureFrontEndBuild(task: KremaFrontendBuildTask) {

@@ -43,7 +43,7 @@ data class BundleSettings(
     @get:Optional
     val copyright: String? = null,
 ) : Serializable {
-    /** Application jar name, passed to jpackage as `--main-jar`. */
+    /** 应用 jar 名，作为 jpackage 的 --main-jar。 */
     @get:Internal
     val appJarName get() = appJarName(appName)
 }

@@ -50,6 +50,7 @@ kotlin {
     jvmToolchain(25)
     compilerOptions {
         optIn = listOf("kotlin.io.path.ExperimentalPathApi")
+        freeCompilerArgs.add("-Xcontext-parameters")
     }
 }
 
@@ -58,6 +59,7 @@ java {
         languageVersion.set(JavaLanguageVersion.of(25))
     }
     withSourcesJar()
+    withJavadocJar()
 }
 
 tasks.withType<JavaCompile>().configureEach {

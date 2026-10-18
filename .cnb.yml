@@ -3,8 +3,8 @@
 .verify: &verify
   name: 构建与格式检查 + e2e
   script:
-    - (cd krema-gradle-plugin && ./gradlew spotlessCheck test --configuration-cache)
-    - (cd krema-demo && ./gradlew spotlessCheck test --configuration-cache)
+    - (cd krema-gradle-plugin && ./gradlew check --configuration-cache)
+    - (cd krema-demo && ./gradlew check --configuration-cache)
     - bash scripts/e2e.sh
 
 # e2e 截图由 e2e.sh 生成到工作区内，这里用 cnbcool/attachments 插件挂到本次 commit（14 天过期）。

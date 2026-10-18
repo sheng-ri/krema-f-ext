@@ -23,7 +23,7 @@ internal data class KremaConfig(
     val windows: Windows = Windows(),
 ) : Serializable
 
-/** [build] 段：主类、产物目录与 dev 地址。 */
+/** `[build]` 段：主类、产物目录与 dev 地址。 */
 internal data class Build(
     val frontendOutDir: String? = null,
     val outDir: String? = null,
@@ -33,14 +33,14 @@ internal data class Build(
     val devUrl: String? = null,
 ) : Serializable
 
-/** [bundle] 段：图标与包标识。 */
+/** `[bundle]` 段：图标与包标识。 */
 internal data class Bundle(
     val icon: String? = null,
     val identifier: String? = null,
     val copyright: String? = null,
 ) : Serializable
 
-/** [bundle.windows] 段：jpackage 的 --win-* 参数，仅 exe/msi 安装器认。 */
+/** `[bundle.windows]` 段：jpackage 的 --win-* 参数，仅 exe/msi 安装器认。 */
 internal data class Windows(
     val dirChooser: Boolean? = null,
     val helpUrl: String? = null,
@@ -53,7 +53,7 @@ internal data class Windows(
     val upgradeUuid: String? = null,
 ) : Serializable
 
-/** [build] 里的 frontend_* 键，单列成前端输入。 */
+/** `[build]` 里的 frontend_* 键，单列成前端输入。 */
 internal data class Frontend(
     val dir: String? = null,
     val buildCommand: String? = null,

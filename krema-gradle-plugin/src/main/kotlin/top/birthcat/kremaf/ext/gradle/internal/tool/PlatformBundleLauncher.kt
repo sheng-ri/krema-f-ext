@@ -23,7 +23,7 @@ internal class PlatformBundleLauncher(
             Platform.WINDOWS -> appImageDir.resolve("${settings.appName}.exe")
             Platform.LINUX -> appImageDir.resolve("bin").resolve(settings.appName)
             Platform.UNKNOWN -> throw UnsupportedOperationException("No launcher available for '$target'")
-        }
+        }!!
 
     /**
      * 起应用进程。

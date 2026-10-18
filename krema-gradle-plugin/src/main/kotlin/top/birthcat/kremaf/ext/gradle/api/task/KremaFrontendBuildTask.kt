@@ -63,7 +63,7 @@ abstract class KremaFrontendBuildTask : DefaultTask() {
 
     /** Frontend sources and lock files used as cache inputs. */
     @get:InputFiles
-    @get:PathSensitive(PathSensitivity.ABSOLUTE)
+    @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val frontendInputs: ConfigurableFileCollection
 
     /** Injected exec operations. */

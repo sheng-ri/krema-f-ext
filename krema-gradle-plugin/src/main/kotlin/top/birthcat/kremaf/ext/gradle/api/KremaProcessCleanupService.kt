@@ -10,7 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Build service that tracks long-lived processes started by run tasks and destroys their process
- * trees when the build finishes or is cancelled, so no orphan application is left behind.
+ * trees when the build finishes or is canceled, so no orphan application is left behind.
  */
 abstract class KremaProcessCleanupService :
     BuildService<BuildServiceParameters.None>,

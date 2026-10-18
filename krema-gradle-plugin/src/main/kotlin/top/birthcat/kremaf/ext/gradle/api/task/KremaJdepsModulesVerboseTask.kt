@@ -6,7 +6,6 @@ package top.birthcat.kremaf.ext.gradle.api.task
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
-import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Classpath
 import org.gradle.api.tasks.Input
@@ -40,8 +39,8 @@ abstract class KremaJdepsModulesVerboseTask : DefaultTask() {
     abstract val classpathFiles: ConfigurableFileCollection
 
     /** Report destination; defaults to build/krema/jdeps-verbose.txt. */
-    @get:Internal
-    abstract val reportFile: RegularFileProperty
+    @get:Input
+    abstract val reportFilePath: Property<String>
 
     /** Directory of the jdeps executable from the JDK toolchain. */
     @get:Internal
@@ -66,7 +65,7 @@ abstract class KremaJdepsModulesVerboseTask : DefaultTask() {
                 classpathFiles,
             ).run(verbose = true)
         // 原样落盘：经字符串中转会按 Gradle 默认编码改写非 UTF-8 报告。
-        val target = reportFile.get().asFile.toPath()
+        val target = Path.of(reportFilePath.get())
         target.parent?.let(Files::createDirectories)
         Files.write(target, out.bytes)
         if (out.exitValue != 0) {

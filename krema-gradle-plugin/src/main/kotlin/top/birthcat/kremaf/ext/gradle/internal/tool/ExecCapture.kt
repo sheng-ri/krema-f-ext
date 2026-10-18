@@ -15,7 +15,7 @@ internal class CapturedExec(
     stream: ByteArrayOutputStream,
 ) {
     val output = String(stream.toByteArray(), Charset.defaultCharset())
-    val bytes = stream.toByteArray()
+    val bytes: ByteArray = stream.toByteArray()
 }
 
 /** 执行命令并捕获输出，退出码交给调用方；workingDir 供解包类命令使用。 */
