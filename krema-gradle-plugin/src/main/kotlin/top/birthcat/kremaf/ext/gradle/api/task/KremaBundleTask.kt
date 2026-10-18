@@ -24,7 +24,7 @@ import org.gradle.process.ExecOperations
 import top.birthcat.kremaf.ext.gradle.api.BundleSettings
 import top.birthcat.kremaf.ext.gradle.api.KremaTaskNames
 import top.birthcat.kremaf.ext.gradle.api.Platform
-import top.birthcat.kremaf.ext.gradle.internal.config.BUNDLE_DEPS
+import top.birthcat.kremaf.ext.gradle.internal.config.BUNDLE_LIBS
 import top.birthcat.kremaf.ext.gradle.internal.tool.JpackageTool
 import java.nio.file.Path
 import javax.inject.Inject
@@ -86,22 +86,22 @@ abstract class KremaBundleTask : DefaultTask() {
     fun bundle() {
         val platform = hostPlatform.get()
         val settings = bundleSettings.get()
-        val bundleLibDir =
+        val bundleLibsDir =
             buildDir
                 .map {
-                    it.dir(BUNDLE_DEPS)
+                    it.dir(BUNDLE_LIBS)
                 }.apply {
                     get().asFile.mkdirs()
                 }
         fileSystemOperations.sync {
             from(inputJarDeps)
-            into(bundleLibDir)
+            into(bundleLibsDir)
         }
         JpackageTool(execOperations).appImage(
             binDir = Path.of(jdkBinDir.get()),
             platform = platform,
             settings = settings,
-            appLibDir = bundleLibDir.get().asFile.toPath(),
+            appLibDir = bundleLibsDir.get().asFile.toPath(),
             runtimeImageDir = inputRuntimeImageDir.get().asFile.toPath(),
             dest = outputBundleDir.get().asFile.toPath(),
         )
