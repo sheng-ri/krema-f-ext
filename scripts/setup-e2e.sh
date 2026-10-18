@@ -46,7 +46,7 @@ done
 if [ -n "$MISSING_DEPS" ]; then
   echo "== 安装缺失依赖:$MISSING_DEPS =="
   apt-get update
-  apt-get install -y $MISSING_DEPS
+  apt-get install --no-install-recommends -y $MISSING_DEPS
 fi
 
 echo "setup-e2e 完成：pnpm 与 appimagetool 已就绪（$(command -v appimagetool)），桌面环境（Xvfb + xwininfo）已就绪"

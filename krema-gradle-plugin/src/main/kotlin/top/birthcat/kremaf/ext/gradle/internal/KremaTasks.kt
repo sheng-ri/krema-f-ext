@@ -81,13 +81,16 @@ internal fun Project.registerKremaTasks() {
 
             frontendInputs.from(
                 project.fileTree(inputFrontendDir) {
+                    exclude("node_modules")
                     include(
                         "**/*.vue",
                         "**/*.ts",
                         "**/*.js",
                         "**/*.tsx",
                         "**/*.jsx",
-                        "*.lock",
+                        "pnpm-lock.yaml",
+                        "yarn.lock",
+                        "package-lock.json",
                         "**/*.html",
                         "**/*.css",
                         "**/*.png",

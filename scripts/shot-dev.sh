@@ -96,15 +96,6 @@ done
 has_window || fail "没等到窗口「Krema Demo」，见 $RUN_LOG"
 grep -q "Running event loop" "$RUN_LOG" 2>/dev/null || fail "app 没进事件循环（webview 可能没起来），见 $RUN_LOG"
 
-# 进了事件循环也只代表 webview 开始加载；dev 模式下页面还要现编现取，
-# 立刻截图仍是空窗。等页面真正画出来：轮询 vite 有没有收到 index.html 的请求。
-for _ in $(seq 1 60); do
-  grep -qE "GET /index\.html|GET /src/main\.tsx" /tmp/krema-shot-vite.log 2>/dev/null && break
-  sleep 0.5
-done
-# 再给 webview 一小段渲染与布局时间，否则可能只画到一半。
-sleep "${RENDER_WAIT:-2}"
-
 # --- 截图 ---
 # 抓 root 而非按 window id：Xvfb 下 app 窗口没有 WM 装饰，按 id 抓会报 no window with specified ID。
 timeout 20 import -display ":$DISPLAY_NUM" -window root "$SHOT" 2>/dev/null || fail "截图失败，见 /tmp/krema-shot-xvfb.log"

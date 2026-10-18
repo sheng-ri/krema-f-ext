@@ -11,7 +11,7 @@ internal const val ASSETS_DIR = "assets"
 internal const val BUNDLE_DIR_NAME = "app"
 
 /** 运行期依赖 jar 的目录名。 */
-internal const val BUNDLE_DEPS = "deps"
+internal const val BUNDLE_LIBS = "libs"
 
 /** 产物根目录的默认名。 */
 internal const val DEFAULT_OUTPUT_DIR_NAME = "krema"
