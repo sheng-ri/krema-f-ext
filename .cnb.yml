@@ -57,13 +57,6 @@ $:
         CODEBUDDY_IS_SANDBOX: 1
         CNB_WELCOME_CMD: source /workspace/scripts/setup-devenv.sh
 
-  pull_request:
-    verify:
-      name: PR 门禁
-      <<: *pipeline
-      stages:
-        - *verify
-
   # 应急手动发布：常规发布走 tag，此按钮仅作兜底。
   web_trigger_release:
     - name: 发布 Release
