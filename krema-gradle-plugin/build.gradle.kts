@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "top.birthcat.kremaf-ext"
-version = providers.gradleProperty("version").getOrElse("0.1.0-SNAPSHOT")
+version = providers.gradleProperty("version").getOrElse("0.1.0")
 
 dependencies {
     implementation(libs.tomlj)
