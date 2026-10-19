@@ -1,9 +1,19 @@
-# 门禁只有一件事：编译过、格式干净、测试绿。
-# 端到端（真开窗口）不进这里 —— 测的是 Krema 运行时，不是本插件。
+# 门禁：编译过、格式干净、单测绿；再加一条真跑 demo 的 e2e 验收（允许联网）。
+# 端到端验产物结构，并在 Xvfb 里真开一次窗口、curl 一次前端资源。
 .verify: &verify
-  name: 构建与格式检查
+  name: 构建与格式检查 + e2e
   script:
-    - ./gradlew spotlessCheck test --configuration-cache
+    - (cd krema-gradle-plugin && ./gradlew check --configuration-cache)
+    - (cd krema-demo && ./gradlew check --configuration-cache)
+    - bash scripts/e2e.sh
+
+# e2e 截图由 e2e.sh 生成到工作区内，这里用 cnbcool/attachments 插件挂到本次 commit（14 天过期）。
+.upload-shot: &upload-shot
+  name: 上传 e2e 截图
+  image: cnbcool/attachments:latest
+  settings:
+    attachments:
+      "krema-demo/build/krema/krema-e2e-screenshot.png": 14
 
 # 构建环境：本仓 Dockerfile 动态构建，平台按 hash 缓存。
 # Gradle 缓存挂到构建节点，跨流水线复用依赖与 wrapper。
@@ -22,7 +32,7 @@
 .publish: &publish
   name: 发布到 maven registry
   script:
-    - ./gradlew publish --configuration-cache
+    - (cd krema-gradle-plugin && ./gradlew publish --configuration-cache)
 
 # 分支键写 "$" 兜底，任何分支的 push / PR 都过门禁。
 $:
@@ -32,43 +42,39 @@ $:
       <<: *pipeline
       stages:
         - *verify
+        - *upload-shot
 
   vscode:
     - docker:
-        image: docker.cnb.cool/birthcat/dev-kotlin-jvm-25:latest
+        image: docker.cnb.cool/birthcat/env/dev-krema-env:latest
       services:
         - vscode
         - docker
+      runner:
+        cpus: 6
+      # 每次打开开发环境自动执行，安装 skills。
+      env:
+        CODEBUDDY_IS_SANDBOX: 1
+        CNB_WELCOME_CMD: source /workspace/scripts/setup-devenv.sh
 
-  pull_request:
-    verify:
-      name: PR 门禁
-      <<: *pipeline
-      stages:
-        - *verify
-
-  # 正式发布。
+  # 应急手动发布：常规发布走 tag，此按钮仅作兜底。
   web_trigger_release:
     - name: 发布 Release
+      imports: https://cnb.cool/BirthCat/jars-key/-/blob/main/krema-f-ext.yml
       <<: *pipeline
       stages:
         - *verify
+        - *upload-shot
         - *publish
 
-  # SNAPSHOT 发布：同版本号直接覆盖，覆盖策略由制品库负责。
-  web_trigger_snapshot:
-    - name: 发布 Snapshot
+# 发布：推送 v* 标签即发版，版本取标签名去掉 v 前缀（v0.2.0 -> 0.2.0）。门禁过了才发。
+v*:
+  tag_push:
+    - name: 发布 Release（tag）
       <<: *pipeline
+      imports: https://cnb.cool/BirthCat/jars-key/-/blob/main/krema-f-ext.yml
       stages:
         - *verify
-        - *publish
-
-  # 手动入口：工具链自检。
-  web_trigger:
-    - name: 工具链自检
-      <<: *pipeline
-      stages:
-        - name: 打印版本
+        - name: 发布到 maven registry
           script:
-            - java -version
-            - ./gradlew --version
+            - (cd krema-gradle-plugin && ./gradlew publish --configuration-cache -Pversion="${CNB_BRANCH#v}")
